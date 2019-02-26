@@ -145,8 +145,8 @@ class Robot(object):
 
             for wall_ in walls:
                 #FIX_AFTER
-                s1 = LineString([(wall_.x1, wall_.y1), (wall_.x2, wall_.y2)])
-                ip = s2.intersection(s1)
+                #s1 = LineString([(wall_.x1, wall_.y1), (wall_.x2, wall_.y2)])
+                ip = s2.intersection(wall_.bound)
                 if ip:
                     sen.calculate_distance(ip)
                     break
@@ -215,15 +215,50 @@ class Robot(object):
         self.x += self.velocity * math.cos(self.theta) * self.dt
         self.y += self.velocity * math.sin(self.theta) * self.dt
 
-        # Constrain Position inside bounds
-        if self.x <= (wall_left.x1 + math.floor(self.width / 2)):
-            self.x = (wall_left.x1 + math.floor(self.width / 2))
-        if self.x >= (wall_right.x1 - math.floor(self.width / 2)):
-            self.x = (wall_right.x1 - math.floor(self.width / 2))
-        if self.y <= (wall_top.y1 + math.floor(self.width / 2)):
-            self.y = (wall_top.y1 + math.floor(self.width / 2))
-        if self.y >= (wall_bottom.y1 - math.floor(self.width / 2)):
-            self.y = (wall_bottom.y1 - math.floor(self.width / 2))
+        #COLLISION
+
+        doubleCollision = False
+        singleCollision = False
+        otherWalls = walls.copy()
+        for wall_ in walls:
+            otherWalls.remove(wall_)
+            col = robot.imminent_collision(wall_)       
+            velSign = self.velocity/ (abs(self.velocity) + 0.000001) 
+
+
+
+
+            if col:
+                self.x -= self.velocity * math.cos(self.theta) * self.dt
+                self.y -= self.velocity * math.sin(self.theta) * self.dt  
+
+                self.x += 0.5 * self.velocity * math.cos(self.theta) * self.dt
+                self.y += 0.5 * self.velocity * math.sin(self.theta) * self.dt 
+
+                col1 = robot.imminent_collision(wall_) #NEED to just check for previous wall.
+
+
+
+
+                if col1:
+
+                    singleCollision = True
+
+                    self.x -= 0.5 * self.velocity * math.cos(self.theta) * self.dt
+                    self.y -= 0.5 * self.velocity * math.sin(self.theta) * self.dt
+
+                    self.x += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.cos(math.radians(wall_.angleDeg )))
+                    self.y += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.sin(math.radians(wall_.angleDeg )))
+
+                    for otherWall in otherWalls:
+
+                        col2 = robot.imminent_collision(otherWall)
+                        if col2:
+                            self.x -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.cos(math.radians(wall_.angleDeg )))
+                            self.y -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.sin(math.radians(wall_.angleDeg )))                            
+                            doubleCollision = True
+
+        #END COLLISION
 
 
     def draw(self):
@@ -251,8 +286,7 @@ class Robot(object):
         for sen in self.sensors:
             pygame.draw.line(win, (255, 0, 0), (sen.x1, CorrY(sen.y1)), (sen.x2, CorrY(sen.y2)), sen.width)
             text_ = self.font.render(str(sen.distance), 1, BLUE)
-            win.blit(text, (sen.x1 + 4, CorrY(sen.y1 + 2)))
-
+            win.blit(text_, (sen.x1, CorrY(sen.y1)))
         #WHEELS
         textPosL = (self.x + (math.cos(self.theta + math.radians(90)) - 0.15) * textDistance,
                    CorrY(self.y + (math.sin(self.theta + math.radians(90))) * textDistance - math.sin(self.theta) * 5 - 5))
@@ -291,8 +325,10 @@ wall_right = Wall(Point(750, 50), Point(750, 550))
 wall_left = Wall(Point(50, 50), Point(50, 550))
 wall_top = Wall(Point(50, 50), Point(750, 50))
 wall_bottom = Wall(Point(50, 550), Point(750, 550))
+wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
-walls = [wall_right, wall_left, wall_top, wall_bottom]
+
+walls = [wall_right, wall_left, wall_top, wall_bottom, wall1]
 
 run = True
 while run:
