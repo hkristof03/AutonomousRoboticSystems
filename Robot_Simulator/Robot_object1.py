@@ -122,6 +122,10 @@ class Robot(object):
         self.center = pnt(self.x,self.y)
         self.circle = self.center.buffer(self.radius).boundary
         self.angleDeg = 0
+        self.collision = False
+        self.collisionScore = 0
+        self.velocityScore = 0
+        self.fitnessScore = 0
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -136,6 +140,22 @@ class Robot(object):
             sen.update_sensor_position(biaspoint)
             #last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, 1)
+
+    def calculate_fitness(self):
+        alpha = -10
+        beta = 1
+        col = 0
+        if self.collision:
+            self.collisionScore +=1
+            col = 1
+        self.velocityScore += (abs(self.velocity))* (1- col) #CHANGE TO DIFFERENCE IN POSITION-BECAUSE WHEN COLLIDING WITH WALL IT WILL SEEM LIKE ITS GOING FAST
+                                            #OR COUNT VELOCITY ONLY WHEN NOT COLLIDING
+        self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore 
+        textP = (self.x, CorrY(self.y))
+        textF = self.font.render(format(self.fitnessScore, '.2f'), 1, BLACK)
+        win.blit(textF, textP)
+        print(self.fitnessScore)
+
 
 
     def calculate_intersection(self, walls_):
@@ -217,8 +237,8 @@ class Robot(object):
 
         #COLLISION
 
-        doubleCollision = False
-        singleCollision = False
+        #doubleCollision = False
+        #singleCollision = False
         otherWalls = walls.copy()
         for wall_ in walls:
             otherWalls.remove(wall_)
@@ -226,7 +246,7 @@ class Robot(object):
             velSign = self.velocity/ (abs(self.velocity) + 0.000001) 
 
 
-
+            self.collision = False
 
             if col:
                 self.x -= self.velocity * math.cos(self.theta) * self.dt
@@ -235,6 +255,8 @@ class Robot(object):
                 self.x += 0.5 * self.velocity * math.cos(self.theta) * self.dt
                 self.y += 0.5 * self.velocity * math.sin(self.theta) * self.dt 
 
+
+
                 col1 = robot.imminent_collision(wall_) #NEED to just check for previous wall.
 
 
@@ -242,13 +264,15 @@ class Robot(object):
 
                 if col1:
 
-                    singleCollision = True
+                    #singleCollision = True
 
                     self.x -= 0.5 * self.velocity * math.cos(self.theta) * self.dt
                     self.y -= 0.5 * self.velocity * math.sin(self.theta) * self.dt
 
                     self.x += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.cos(math.radians(wall_.angleDeg )))
                     self.y += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.sin(math.radians(wall_.angleDeg )))
+
+                    self.collision = True
 
                     for otherWall in otherWalls:
 
@@ -353,6 +377,7 @@ while run:
 
     robot.update_sensors(biasPoint)
     robot.calculate_intersection(walls)
+    robot.calculate_fitness()
 
     redrawGameWindow()
 
