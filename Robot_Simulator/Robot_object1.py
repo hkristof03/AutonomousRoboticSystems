@@ -142,18 +142,19 @@ class Robot(object):
             sen.update_rotate_sensor_line(self.x, self.y, 1)
 
     def calculate_fitness(self):
-        alpha = -10
-        beta = 1
-        col = 0
+        """
+        Calculates the fitness of the robot.
+        Each timestep it increases the score by the absolure value of the velocity, times a constant beta,
+        and reduces the score if the object is colliding by alpha
+        """
+        alpha = -50 #constant to adjust weight of collisions
+        beta = 1    #constant to adjust weight of velocity
+        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
         if self.collision:
-            self.collisionScore +=1
+            self.collisionScore +=1 #total dt that the robot has been colliding
             col = 1
-        self.velocityScore += (abs(self.velocity))* (1- col) #CHANGE TO DIFFERENCE IN POSITION-BECAUSE WHEN COLLIDING WITH WALL IT WILL SEEM LIKE ITS GOING FAST
-                                            #OR COUNT VELOCITY ONLY WHEN NOT COLLIDING
+        self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
         self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore 
-        textP = (self.x, CorrY(self.y))
-        textF = self.font.render(format(self.fitnessScore, '.2f'), 1, BLACK)
-        win.blit(textF, textP)
         print(self.fitnessScore)
 
 
