@@ -29,6 +29,28 @@ class Point(object):
     def distance(self, object):
         return math.sqrt((object.x - self.x)**2 + (object.y - self.y)**2)
 
+
+
+
+
+
+
+
+class dust(object):
+    """
+    Creates the dust
+    """
+    def __init__(self, point, radius):
+        self.x = point.x
+        self.y = point.y
+        self.rad = radius
+    def draw(self):
+        pygame.gfxdraw.filled_circle(win, self.x, CorrY(self.y), self.rad, BROWN)   
+
+
+
+
+
 class Wall(object):
     def __init__(self, startpoint, endpoint):
         self.x1 = startpoint.x
@@ -106,6 +128,7 @@ class Robot(object):
         self.prev_x = self.x
         self.prev_y = self.y
         #Nik's attributes
+        self.prev_theta = 0
         self.width = self.radius * 2
         self.velR = 0
         self.velL = 0
@@ -135,11 +158,11 @@ class Robot(object):
             s.set_sensor_direction(Point(self.x,self.y), angle, self.radius)
             self.sensors.append(s)
 
-    def update_sensors(self, biaspoint):
+    def update_sensors(self, biaspoint, d_theta):
         for sen in self.sensors:
             sen.update_sensor_position(biaspoint)
             #last parameter the rotation degree
-            sen.update_rotate_sensor_line(self.x, self.y, 1)
+            sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
     def calculate_fitness(self):
         """
@@ -328,6 +351,7 @@ def redrawGameWindow():
     for wall in walls:
         wall.draw()
     robot.draw()
+    dust1.draw()
     pygame.display.update()
 
 
@@ -346,6 +370,8 @@ start_point = Point(200, 200)
 robot = Robot(start_point, 40, 1, 12, 40, 10, 1)
 robot.create_adjust_sensors()
 
+dust1 = dust(Point(10,10), 15)
+
 wall_right = Wall(Point(750, 50), Point(750, 550))
 wall_left = Wall(Point(50, 50), Point(50, 550))
 wall_top = Wall(Point(50, 50), Point(750, 50))
@@ -361,6 +387,7 @@ while run:
     pygame.time.delay(30)   #milliseconds delay
     bias_x = 0
     bias_y = 0
+    d_theta = 0
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -372,11 +399,14 @@ while run:
 
     bias_x = robot.x - robot.prev_x
     bias_y = robot.y - robot.prev_y
+    d_theta = robot.angleDeg - robot.prev_theta
+
+    robot.prev_theta = robot.angleDeg
     robot.prev_x = robot.x
     robot.prev_y = robot.y
     biasPoint = Point(bias_x, bias_y)
-
-    robot.update_sensors(biasPoint)
+    
+    robot.update_sensors(biasPoint, d_theta)
     robot.calculate_intersection(walls)
     robot.calculate_fitness()
 
