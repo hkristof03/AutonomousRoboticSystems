@@ -47,7 +47,7 @@ class GeneticAlgorithm(object):
         """
         return [random.choice(individuals) for i in range(k)]
 
-    def selBest(self, individuals, k, fit_attr="fitness"):
+    def selBest(self, individuals, k, fit_attr="fitnessScore"):
         """Select the *k* best individuals among the input *individuals*. The
         list returned contains references to the input *individuals*.
         :param individuals: A list of individuals to select from.
@@ -57,7 +57,7 @@ class GeneticAlgorithm(object):
         """
         return sorted(individuals, key=attrgetter(fit_attr), reverse=True)[:k]
 
-    def selRoulette(self, individuals, k, fit_attr="fitness"):
+    def selRoulette(self, individuals, k, fit_attr="fitnessScore"):
         """Select *k* individuals from the input *individuals* using *k*
         spins of a roulette. The selection is made by looking only at the first
         objective of each individual. The list returned contains references to
@@ -87,7 +87,7 @@ class GeneticAlgorithm(object):
 
         return chosen
 
-    def selTournament(self, individuals, k, tournsize, fit_attr="fitness"):
+    def selTournament(self, individuals, k, tournsize, fit_attr="fitnessScore"):
         """Select the best individual among *tournsize* randomly chosen
         individuals, *k* times. The list returned contains
         references to the input *individuals*.
@@ -154,9 +154,34 @@ class GeneticAlgorithm(object):
 
         return individual
 
+    def GAPipeLine(self, individuals, k):
+
+        chosen_1 = self.selRoulette(individuals, k, )
+        chosen_2 = self.selRoulette(chosen_1, 6)
+        offsprings = []
+        i = 0
+        while i < 6:
+            parent_1 = chosen_2[i].create_chromosome()
+            parent_2 = chosen_2[i + 1].create_chromosome()
+            offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
+            offsprings.append(offs_1)
+            offsprings.append(offs_2)
+            i += 2
+
+        mutated_offsprings = []
+        for i in range(len(offsprings)):
+            mo = self.mutShuffleIndexes(offsprings[i], 0.1)
+            mutated_offsprings.append(mo)
+
+        for i in range(len(chosen_2)):
+            chosen_2[i].update_weights(mutated_offsprings[i])
+
+        new_population = chosen_1 + chosen_2
+
+        return new_population
 
 
-class NeuralNetwork:
+class Weights(object):
 
     def __init__(self, no_of_in_nodes, no_of_out_nodes, no_of_hidden_nodes, bias=None):
         self.no_of_in_nodes = no_of_in_nodes
@@ -167,6 +192,10 @@ class NeuralNetwork:
         self.weights_in_hidden = np.zeros(shape=(self.no_of_hidden_nodes, self.no_of_in_nodes))
         self.weights_hidden_out = np.zeros(shape=(self.no_of_out_nodes, self.no_of_hidden_nodes))
         self.create_weight_matrices()
+
+        self.collisionScore = 0
+        self.velocityScore = 0
+        self.fitnessScore = 0
 
     def create_weight_matrices(self):
         '''
@@ -185,40 +214,64 @@ class NeuralNetwork:
         X = self.truncated_normal(mean=0, sd=1, low=-rad, upp=rad)
         self.weights_hidden_out = X.rvs((self.no_of_out_nodes, self.no_of_hidden_nodes + bias_node))
 
-
     def truncated_normal(self, mean=0, sd=1, low=0, upp=10):
-
-        return truncnorm((low - mean) / sd, (upp - mean) / sd, loc = mean, scale = sd)
-
+        return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
     def create_chromosome(self):
-
         wih = self.weights_in_hidden.flatten()
         woh = self.weights_hidden_out.flatten()
         chromosome = np.concatenate((wih, woh), axis=None)
         return chromosome
 
-
     def update_weights(self, chromosome):
+        self.weights_in_hidden = chromosome[:self.no_of_in_nodes * self.no_of_hidden_nodes].reshape(
+            self.no_of_hidden_nodes,
+            self.no_of_in_nodes)
+        self.weights_hidden_out = chromosome[self.no_of_in_nodes * self.no_of_hidden_nodes:].reshape(
+            self.no_of_out_nodes,
+            self.no_of_hidden_nodes)
 
-        self.weights_in_hidden = chromosome[:self.no_of_in_nodes * self.no_of_hidden_nodes].reshape(self.no_of_hidden_nodes,
-                                                                                                    self.no_of_in_nodes)
-        self.weights_hidden_out = chromosome[self.no_of_in_nodes * self.no_of_hidden_nodes:].reshape(self.no_of_out_nodes,
-                                                                                                     self.no_of_hidden_nodes)
+
+    def calculate_fitness(self, collision, velocity):
+        """
+               Calculates the fitness of the robot.
+               Each timestep it increases the score by the absolure value of the velocity, times a constant beta,
+               and reduces the score if the object is colliding by alpha
+               """
+        alpha = -50  # constant to adjust weight of collisions
+        beta = 1  # constant to adjust weight of velocity
+        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
+        if collision:
+            self.collisionScore += 1  # total dt that the robot has been colliding
+            col = 1
+        self.velocityScore += (abs(velocity)) * (1 - col)  # total positive score from the velocity
+        self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore
+        # print(self.fitnessScore)
+
+class NeuralNetwork:
+
+    def __init__(self, num_of_individuals):
+        self.num_of_individuals = num_of_individuals
+        self.weight_set = []
+        self.create_weight_set()
+
+    def create_weight_set(self):
+        for i in range(self.num_of_individuals):
+            self.weight_set.append(Weights(12, 2, 24))
 
 
-    def run(self, input_vector):
+    def run(self, input_vector, weights):
         '''
         Running the network with an input vector input_vector, which can be a tuple,
         list or ndarray.
         '''
         #turning the input vector into a column vector
         input_vector = np.array(input_vector, ndmin=2).T
-        output_vector = np.dot(self.weights_in_hidden, input_vector)
-        output_vector = sigmoid_activation_function(output_vector)
+        output_vector = np.dot(weights.weights_in_hidden, input_vector)
+        output_vector = np.tanh(output_vector)
 
-        output_vector = np.dot(self.weights_hidden_out, output_vector)
-        output_vector = sigmoid_activation_function(output_vector)
+        output_vector = np.dot(weights.weights_hidden_out, output_vector)
+        output_vector = np.tanh(output_vector) * -8
 
         return [item for sublist in output_vector for item in sublist]
 
@@ -352,7 +405,8 @@ class Robot(object):
         self.velocityScore = 0
         self.fitnessScore = 0
         #Neural Network
-        self.NN = NeuralNetwork(num_sensors, 24, 2)
+        self.NN = NeuralNetwork(20)
+        self.GA = GeneticAlgorithm()
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -368,24 +422,40 @@ class Robot(object):
             # last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
-    def calculate_fitness(self):
-        """
-        Calculates the fitness of the robot.
-        Each timestep it increases the score by the absolure value of the velocity, times a constant beta,
-        and reduces the score if the object is colliding by alpha
-        """
-        alpha = -50  # constant to adjust weight of collisions
-        beta = 1  # constant to adjust weight of velocity
-        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
-        if self.collision:
-            self.collisionScore += 1  # total dt that the robot has been colliding
-            col = 1
-        self.velocityScore += (abs(self.velocity)) * (1 - col)  # total positive score from the velocity
-        self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore
-        #print(self.fitnessScore)
+    def calculate_fitness_for_weights(self):
+
+        for i in range(self.NN.num_of_individuals):
+            self.update_velocity(self.NN.weight_set[i])
+            self.NN.weight_set[i].calculate_fitness(self.collision, self.velocity)
+
+            print(self.NN.weight_set[i].fitnessScore)
+
+    def update_velocity(self, weights):
+        distances = []
+        for sen in self.sensors:
+            distances.append(sen.distance)
+        velocities = self.NN.run(distances, weights)
+        self.velL, self.velR = velocities[0], velocities[1]
+        #print("velL:", self.velL, "velR:", self.velR)
+
+    def run_GA(self):
+        '''
+        chromosomes = []
+        for i in range(self.NN.num_of_individuals):
+            chromosome = self.NN.weight_set[i].create_chromosome()
+            chromosomes.append(chromosome)
+        '''
+        new_population = self.GA.GAPipeLine(self.NN.weight_set, 14)
+
+        '''
+        for i in range(self.NN.num_of_individuals):
+            self.NN.weight_set[i].update_weights(new_population[i])
+        '''
+        self.NN.weight_set = new_population
 
 
-    def calculate_intersection(self, walls_):
+
+    def calculate_intersection(self, walls):
 
         for sen in self.sensors:
             s2 = LineString([(sen.x1, sen.y1), (sen.x2, sen.y2)])
@@ -439,14 +509,6 @@ class Robot(object):
 
         if self.velR <= self.velMin:
             self.velR = self.velMin
-
-    def update_velocity(self):
-        distances = np.empty(0)
-        for sen in self.sensors:
-            distances = np.append(distances, sen.distance)
-        velocities = self.NN.run(distances)
-        self.velL, self.velR = velocities[0], velocities[1]
-        print("velL:", self.velL, "velR:", self.velR)
 
     def move(self):
 
@@ -603,7 +665,7 @@ while run:
     keys = pygame.key.get_pressed()
     robot.key_input()
     '''
-    robot.update_velocity()
+    robot.calculate_fitness_for_weights()
     robot.move()
 
     bias_x = robot.x - robot.prev_x
@@ -617,8 +679,8 @@ while run:
 
     robot.update_sensors(biasPoint, d_theta)
     robot.calculate_intersection(walls)
-    #robot.calculate_fitness()
-    #robot.update_velocity()
+
+    robot.run_GA()
 
     redrawGameWindow()
 
