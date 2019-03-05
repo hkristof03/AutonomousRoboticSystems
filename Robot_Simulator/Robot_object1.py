@@ -1,4 +1,4 @@
-import pygame, pygame.gfxdraw, math
+import pygame, pygame.gfxdraw, math, random
 from shapely.geometry import LineString
 from shapely.geometry import Point as pnt
 
@@ -32,11 +32,34 @@ class Point(object):
 
 
 
+class Dust( object):
+    """
+    Creates the dust for the whole map, comprised of the individual dust specks
+    defined by the dust_speck class
+    """
+    def __init__(self, speckNumber, maxX, maxY, radius):
+        self.specks = []
+        self.speckNumber = speckNumber
+        self.maxX = maxX
+        self.maxY = maxY
+        self.radius = radius
+        for i in range(self.speckNumber):
+            x = random.randint(self.radius, self.maxX - self.radius)
+            y = random.randint(self.radius, self.maxY - self.radius)
+            d = dust_speck(Point(x,y), self.radius)
+            self.specks.append(d)
+            d.draw()
+
+    def draw(self):
+        for speck in self.specks:
+            speck.draw()
 
 
 
 
-class dust(object):
+
+
+class dust_speck(object):
     """
     Creates the dust
     """
@@ -46,6 +69,7 @@ class dust(object):
         self.rad = radius
     def draw(self):
         pygame.gfxdraw.filled_circle(win, self.x, CorrY(self.y), self.rad, BROWN)   
+
 
 
 
@@ -149,6 +173,7 @@ class Robot(object):
         self.collisionScore = 0
         self.velocityScore = 0
         self.fitnessScore = 0
+        self.dustEaten = 0
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -171,13 +196,21 @@ class Robot(object):
         and reduces the score if the object is colliding by alpha
         """
         alpha = -50 #constant to adjust weight of collisions
-        beta = 1    #constant to adjust weight of velocity
+        beta = 100   #constant to adjust weight of velocity
         col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+
+
         if self.collision:
             self.collisionScore +=1 #total dt that the robot has been colliding
             col = 1
+
+        """
+
         self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
         self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore 
+        """
+
+        self.fitnessScore = alpha * self.collisionScore + beta  * self.dustEaten
         print(self.fitnessScore)
 
 
@@ -205,6 +238,19 @@ class Robot(object):
         self.circle = self.center.buffer(self.radius + 2).boundary
         collision = self.circle.intersection(wall.bound)
         return collision
+
+    def eat_dust(self, Dust):
+        """
+        Checks if a dust_speck's center is inside the rumba. If so it gets
+        eaten, and the dustEaten score increases, which is used later to
+        calculate the fitness function.
+
+        """
+        for speck in Dust.specks:
+            if (speck.x - self.x)**2 + (speck.y - self.y)**2 <= self.radius**2:
+                Dust.specks.remove(speck)
+                self.dustEaten += 1
+
 
 
     def key_input(self):
@@ -264,13 +310,16 @@ class Robot(object):
         #doubleCollision = False
         #singleCollision = False
         otherWalls = walls.copy()
+
+        self.collision = False
+
         for wall_ in walls:
             otherWalls.remove(wall_)
             col = robot.imminent_collision(wall_)       
             velSign = self.velocity/ (abs(self.velocity) + 0.000001) 
 
 
-            self.collision = False
+            
 
             if col:
                 self.x -= self.velocity * math.cos(self.theta) * self.dt
@@ -279,7 +328,7 @@ class Robot(object):
                 self.x += 0.5 * self.velocity * math.cos(self.theta) * self.dt
                 self.y += 0.5 * self.velocity * math.sin(self.theta) * self.dt 
 
-
+                self.collision = True
 
                 col1 = robot.imminent_collision(wall_) #NEED to just check for previous wall.
 
@@ -296,7 +345,7 @@ class Robot(object):
                     self.x += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.cos(math.radians(wall_.angleDeg )))
                     self.y += self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.sin(math.radians(wall_.angleDeg )))
 
-                    self.collision = True
+                    
 
                     for otherWall in otherWalls:
 
@@ -305,6 +354,9 @@ class Robot(object):
                             self.x -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.cos(math.radians(wall_.angleDeg )))
                             self.y -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (math.sin(math.radians(wall_.angleDeg )))                            
                             doubleCollision = True
+
+
+                
 
         #END COLLISION
 
@@ -348,10 +400,10 @@ class Robot(object):
 
 def redrawGameWindow():
     win.fill((WHITE_2))
+    Dust.draw()
     for wall in walls:
         wall.draw()
     robot.draw()
-    dust1.draw()
     pygame.display.update()
 
 
@@ -370,7 +422,8 @@ start_point = Point(200, 200)
 robot = Robot(start_point, 40, 1, 12, 40, 10, 1)
 robot.create_adjust_sensors()
 
-dust1 = dust(Point(10,10), 15)
+Dust = Dust(70, maxX, maxY, 15)
+#dust1 = dust_speck(Point(10,10), 15)
 
 wall_right = Wall(Point(750, 50), Point(750, 550))
 wall_left = Wall(Point(50, 50), Point(50, 550))
@@ -396,6 +449,7 @@ while run:
     keys = pygame.key.get_pressed()
     robot.key_input()
     robot.move()
+    robot.eat_dust(Dust)
 
     bias_x = robot.x - robot.prev_x
     bias_y = robot.y - robot.prev_y
