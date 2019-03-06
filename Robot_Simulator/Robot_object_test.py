@@ -8,6 +8,8 @@ from scipy.special import expit as sigmoid_activation_function
 import random
 from operator import attrgetter
 
+import pandas as pd
+
 import time
 
 #from .Definitions import *
@@ -154,13 +156,15 @@ class GeneticAlgorithm(object):
 
         return individual
 
-    def GAPipeLine(self, individuals, k):
-
-        chosen_1 = self.selRoulette(individuals, k, )
-        chosen_2 = self.selRoulette(chosen_1, 6)
+    def GAPipeLine(self, individuals, proportion):
+        #parents and children number
+        pk = int(len(individuals) * proportion)
+        ck = int(len(individuals) - pk)
+        chosen_1 = self.selRoulette(individuals, pk)
+        chosen_2 = self.selRoulette(chosen_1, ck)
         offsprings = []
         i = 0
-        while i < 6:
+        while i < ck:
             parent_1 = chosen_2[i].create_chromosome()
             parent_2 = chosen_2[i + 1].create_chromosome()
             offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
@@ -257,7 +261,7 @@ class NeuralNetwork:
 
     def create_weight_set(self):
         for i in range(self.num_of_individuals):
-            self.weight_set.append(Weights(12, 2, 24))
+            self.weight_set.append(Weights(12, 2, 6))
 
 
     def run(self, input_vector, weights):
@@ -271,7 +275,7 @@ class NeuralNetwork:
         output_vector = np.tanh(output_vector)
 
         output_vector = np.dot(weights.weights_hidden_out, output_vector)
-        output_vector = np.tanh(output_vector) * -8
+        output_vector = np.tanh(output_vector) * 6
 
         return [item for sublist in output_vector for item in sublist]
 
@@ -405,8 +409,10 @@ class Robot(object):
         self.velocityScore = 0
         self.fitnessScore = 0
         #Neural Network
-        self.NN = NeuralNetwork(20)
+        self.NN = NeuralNetwork(50)
         self.GA = GeneticAlgorithm()
+        #Historical data for plotting
+        self.df = pd.DataFrame(columns=['Best_fitness_score'])
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -439,18 +445,19 @@ class Robot(object):
         #print("velL:", self.velL, "velR:", self.velR)
 
     def run_GA(self):
-        '''
-        chromosomes = []
-        for i in range(self.NN.num_of_individuals):
-            chromosome = self.NN.weight_set[i].create_chromosome()
-            chromosomes.append(chromosome)
-        '''
-        new_population = self.GA.GAPipeLine(self.NN.weight_set, 14)
 
-        '''
-        for i in range(self.NN.num_of_individuals):
-            self.NN.weight_set[i].update_weights(new_population[i])
-        '''
+        lst_dict = []
+        col = 'Best_fitness_score'
+        val = max(getattr(ind, 'fitnessScore') for ind in self.NN.weight_set)
+        df_ = pd.DataFrame([{col:val}])
+        self.df = self.df.append(df_, ignore_index=True)
+        if len(self.df) % 100 == 0:
+            ax = self.df.plot()
+            fig = ax.get_figure()
+            fig.savefig('Fitness_score_evolution.jpg')
+
+        new_population = self.GA.GAPipeLine(self.NN.weight_set, 0.8)
+
         self.NN.weight_set = new_population
 
 
