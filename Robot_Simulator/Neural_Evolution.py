@@ -158,26 +158,25 @@ class GeneticAlgorithm(object):
 
     def GAPipeLine(self, individuals, proportion):
         #parents and children number
-        #pk = int(len(individuals) * proportion)
-        #ck = int(len(individuals) - pk)
-        #chosen_1 = self.selRoulette(individuals, pk)
-        #chosen_2 = self.selRoulette(chosen_1, ck)
-        chosen_1 = self.selRoulette(individuals, 16)
-        chosen_2 = self.selRoulette(chosen_1, 4)
+        pk = int(len(individuals) * proportion)
+        ck = int(len(individuals) - pk)
+        chosen_1 = self.selRoulette(individuals, pk)
+        chosen_2 = self.selRoulette(chosen_1, ck)
         offsprings = []
-        #i_ = 0
+
         print("len individuals:", len(individuals))
-        #print("pk:", pk)
-        #print("ck", ck)
+
         i_ = 0
-        while i_ < 4:
+        step = 2
+        while i_ < ck:
+            print("i_ before parents:", i_)
             parent_1 = chosen_2[i_].NN.create_chromosome()
             parent_2 = chosen_2[i_ + 1].NN.create_chromosome()
             offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
             offsprings.append(offs_1)
             offsprings.append(offs_2)
-            i_ += 2
-            print("i_:", i_)
+            i_ = i_ + step
+            print("i_ at end:", i_)
 
         mutated_offsprings = []
         for i_ in range(len(offsprings)):
@@ -594,7 +593,7 @@ def redrawGameWindow():
     pygame.display.update()
 
 
-def run_GA(individuals, df, GA):
+def run_GA(individuals, proportion, df, GA):
 
     lst_dict = []
     col = 'Best_fitness_score'
@@ -606,7 +605,7 @@ def run_GA(individuals, df, GA):
         fig = ax.get_figure()
         fig.savefig('Fitness_score_evolution.jpg')
 
-    new_population = GA.GAPipeLine(individuals, 0.6)
+    new_population = GA.GAPipeLine(individuals, proportion)
 
     return new_population
 
@@ -632,7 +631,8 @@ for i in range(number_of_individuals):
 GA = GeneticAlgorithm()
 #DataFrame that stores Historical data for plotting
 df = pd.DataFrame(columns=['Best_fitness_score'])
-
+#parents and children proportion
+proportion = 0.6
 
 dust1 = dust(Point(10, 10), 15)
 
@@ -644,6 +644,7 @@ wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
 walls = [wall_right, wall_left, wall_top, wall_bottom, wall1]
 
+generation = 0
 run = True
 while run:
 
@@ -677,11 +678,13 @@ while run:
 
             dt += 1
 
-    robots = run_GA(robots, df, GA)
+    robots = run_GA(robots, proportion, df, GA)
 
     for robot in robots:
         robot.fitnessScore = 0
 
+    generation += 1
+    print("generation:", generation)
     #redrawGameWindow()
 
     #time.sleep(0.5)
