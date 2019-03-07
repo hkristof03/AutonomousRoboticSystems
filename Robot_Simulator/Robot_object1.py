@@ -189,14 +189,13 @@ class Robot(object):
             #last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
-    def calculate_fitness(self):
+    def fitness_function(self):
         """
         Calculates the fitness of the robot.
-        Each timestep it increases the score by the absolure value of the velocity, times a constant beta,
-        and reduces the score if the object is colliding by alpha
+        Dust contributes positively, Collisions negatively
         """
-        alpha = -50 #constant to adjust weight of collisions
-        beta = 100   #constant to adjust weight of velocity
+        coll_weight = -50 #constant to adjust weight of collisions
+        dust_weight = 100   #constant to adjust weight of velocity
         col = 0     #col is used to completely discount the velocity contribution if the object is colliding
 
 
@@ -210,8 +209,35 @@ class Robot(object):
         self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore 
         """
 
-        self.fitnessScore = alpha * self.collisionScore + beta  * self.dustEaten
+        self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten
         print(self.fitnessScore)
+
+
+    def fitness_function_1(self):
+        """
+
+        Calculates the fitness of the robot.
+        Dust contributes positively, Collisions negatively, and velocity contributes positively.
+        """
+        coll_weight = -50 #constant to adjust weight of collisions
+        dust_weight = 100   #constant to adjust weight of velocity
+        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+        vel_weight = 0.1
+
+
+        if self.collision:
+            self.collisionScore +=1 #total dt that the robot has been colliding
+            col = 1
+
+        
+
+        self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
+
+        
+        self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten + vel_weight * self.velocityScore 
+        print(self.fitnessScore)
+
+
 
 
 
@@ -462,7 +488,7 @@ while run:
     
     robot.update_sensors(biasPoint, d_theta)
     robot.calculate_intersection(walls)
-    robot.calculate_fitness()
+    robot.fitness_function_1()
 
     redrawGameWindow()
 
