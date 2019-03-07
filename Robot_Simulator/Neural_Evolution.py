@@ -158,30 +158,37 @@ class GeneticAlgorithm(object):
 
     def GAPipeLine(self, individuals, proportion):
         #parents and children number
-        pk = int(len(individuals) * proportion)
-        ck = int(len(individuals) - pk)
-        chosen_1 = self.selRoulette(individuals, pk)
-        chosen_2 = self.selRoulette(chosen_1, ck)
+        #pk = int(len(individuals) * proportion)
+        #ck = int(len(individuals) - pk)
+        #chosen_1 = self.selRoulette(individuals, pk)
+        #chosen_2 = self.selRoulette(chosen_1, ck)
+        chosen_1 = self.selRoulette(individuals, 16)
+        chosen_2 = self.selRoulette(chosen_1, 4)
         offsprings = []
-        i = 0
-        while i < ck:
-            parent_1 = chosen_2[i].NN.create_chromosome()
-            parent_2 = chosen_2[i + 1].NN.create_chromosome()
+        #i_ = 0
+        print("len individuals:", len(individuals))
+        #print("pk:", pk)
+        #print("ck", ck)
+        i_ = 0
+        while i_ < 4:
+            parent_1 = chosen_2[i_].NN.create_chromosome()
+            parent_2 = chosen_2[i_ + 1].NN.create_chromosome()
             offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
             offsprings.append(offs_1)
             offsprings.append(offs_2)
-            i += 2
+            i_ += 2
+            print("i_:", i_)
 
         mutated_offsprings = []
-        for i in range(len(offsprings)):
-            mo = self.mutShuffleIndexes(offsprings[i], 0.1)
+        for i_ in range(len(offsprings)):
+            mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
             mutated_offsprings.append(mo)
 
-        for i in range(len(chosen_2)):
-            chosen_2[i].NN.update_weights(mutated_offsprings[i])
+        for i_ in range(len(chosen_2)):
+            chosen_2[i_].NN.update_weights(mutated_offsprings[i_])
 
         new_population = chosen_1 + chosen_2
-
+        print("len new population:", len(new_population))
         return new_population
 
 
@@ -416,24 +423,6 @@ class Robot(object):
         velocities = self.NN.run(distances)
         self.velL, self.velR = velocities[0], velocities[1]
 
-    def run_GA(self):
-
-        lst_dict = []
-        col = 'Best_fitness_score'
-        val = max(getattr(ind, 'fitnessScore') for ind in self.NN.weight_set)
-        df_ = pd.DataFrame([{col: val}])
-        self.df = self.df.append(df_, ignore_index=True)
-        if len(self.df) % 100 == 0:
-            ax = self.df.plot()
-            fig = ax.get_figure()
-            fig.savefig('Fitness_score_evolution.jpg')
-
-        new_population = self.GA.GAPipeLine(self.NN.weight_set, 0.8)
-
-        self.NN.weight_set = new_population
-
-
-
     def calculate_intersection(self, walls):
 
         for sen in self.sensors:
@@ -617,7 +606,7 @@ def run_GA(individuals, df, GA):
         fig = ax.get_figure()
         fig.savefig('Fitness_score_evolution.jpg')
 
-    new_population = GA.GAPipeLine(individuals, 0.8)
+    new_population = GA.GAPipeLine(individuals, 0.6)
 
     return new_population
 
@@ -689,6 +678,9 @@ while run:
             dt += 1
 
     robots = run_GA(robots, df, GA)
+
+    for robot in robots:
+        robot.fitnessScore = 0
 
     #redrawGameWindow()
 
