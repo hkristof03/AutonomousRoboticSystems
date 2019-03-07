@@ -284,6 +284,12 @@ class Dust( object):
         self.maxY = maxY
         self.radius = radius
 
+        for i in range(self.speckNumber):
+            x = random.randint(self.radius, self.maxX - self.radius)
+            y = random.randint(self.radius, self.maxY - self.radius)
+            d = dust_speck(Point(x,y), self.radius)
+            self.specks.append(d)
+
 
     def draw(self):
         for speck in self.specks:
@@ -427,7 +433,11 @@ class Robot(object):
         self.collisionScore = 0
         self.velocityScore = 0
         self.fitnessScore = 0
+        self.fitnessScorePrevious = 0
         self.dustEaten = 0
+        self.time = 0
+        self.terminateTimer = 0
+        self.terminateLimit = 200
         #Neural Network
         self.NN = NeuralNetwork(12, 2, 24)
 
@@ -440,13 +450,23 @@ class Robot(object):
 
         """
         for speck in Dust.specks:
-            if (speck.x - self.x)**2 + (speck.y - self.y)**2 <= self.radius**2:
+            if (speck.x - self.x)**2 + (speck.y - self.y)**2 <= (self.radius + speck.rad/2)**2:
                 Dust.specks.remove(speck)
                 self.dustEaten += 1
 
-    def reinitialize(self):
+    def reinitialize(self, point):
         self.fitnessScore = 0
+        self.fitnessScorePrevious = 0
         self.dustEaten = 0
+        self.collisionScore = 0
+        self.time = 0
+        self.x = point.x
+        self.y = point.y
+        self.terminateTimer = 0
+
+    def reposition(self, point):
+        self.x = point.x
+        self.y = point.y
 
 
     def create_adjust_sensors(self):
@@ -463,6 +483,26 @@ class Robot(object):
             # last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
+    def terminate_check(self):
+        """
+        Checks (after 10 timesteps)if the fitnessScore has not increased. 
+        If terminateLimit timesteps have passed, where the timestep does not increase, it 
+        terminates the simulation.
+        It also terminates the simulation after 2000 timesteps
+        """
+        terminate = False
+        if self.time>=10:
+            if self.fitnessScorePrevious >= self.fitnessScore:
+                self.terminateTimer += 1
+            else:
+                self.terminateTimer = 0
+            if self.terminateTimer > self.terminateLimit:
+                terminate = True
+                self.terminateTimer = 0
+        return terminate
+
+
+
 
 
     def fitness_function(self):
@@ -470,7 +510,8 @@ class Robot(object):
         Calculates the fitness of the robot.
         Dust contributes positively, Collisions negatively
         """
-        coll_weight = -50 #constant to adjust weight of collisions
+        self.fitnessScorePrevious = self.fitnessScore
+        coll_weight = -20 #constant to adjust weight of collisions
         dust_weight = 100   #constant to adjust weight of velocity
         col = 0     #col is used to completely discount the velocity contribution if the object is colliding
 
@@ -478,12 +519,6 @@ class Robot(object):
         if self.collision:
             self.collisionScore +=1 #total dt that the robot has been colliding
             col = 1
-
-        """
-
-        self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
-        self.fitnessScore = alpha * self.collisionScore + beta * self.velocityScore 
-        """
 
         self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten
         #print(self.fitnessScore)
@@ -495,6 +530,7 @@ class Robot(object):
         Calculates the fitness of the robot.
         Dust contributes positively, Collisions negatively, and velocity contributes positively.
         """
+        self.fitnessScorePrevious = self.fitnessScore
         coll_weight = -50 #constant to adjust weight of collisions
         dust_weight = 100   #constant to adjust weight of velocity
         col = 0     #col is used to completely discount the velocity contribution if the object is colliding
@@ -505,12 +541,50 @@ class Robot(object):
             self.collisionScore +=1 #total dt that the robot has been colliding
             col = 1
 
-        
+        self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
+        self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten + vel_weight * self.velocityScore 
+       # print(self.fitnessScore)
+
+    def fitness_function_2(self):
+        """
+
+        Calculates the fitness of the robot.
+        Dust and velocity contribute positively, divided by collision number.
+        """
+        self.fitnessScorePrevious = self.fitnessScore
+        coll_weight = 1 #constant to adjust weight of collisions
+        dust_weight = 100   #constant to adjust weight of velocity
+        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+        vel_weight = 0.1
+
+
+        if self.collision:
+            self.collisionScore +=1 #total dt that the robot has been colliding
+            col = 1
 
         self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
+        self.fitnessScore =  (dust_weight  * self.dustEaten + vel_weight * self.velocityScore)/ (coll_weight * self.collisionScore + 1)
+       # print(self.fitnessScore)
 
-        
-        self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten + vel_weight * self.velocityScore 
+    def fitness_function_3(self):
+        """
+
+        Calculates the fitness of the robot.
+        Dust and velocity contribute positively, divided by collision number.
+        """
+        self.fitnessScorePrevious = self.fitnessScore
+        coll_weight = 1 #constant to adjust weight of collisions
+        dust_weight = 100   #constant to adjust weight of velocity
+        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+        vel_weight = 0.1
+
+
+        if self.collision:
+            self.collisionScore +=1 #total dt that the robot has been colliding
+            col = 1
+
+       # self.velocityScore += (abs(self.velocity))* (1- col) #total positive score from the velocity
+        self.fitnessScore =  (dust_weight  * self.dustEaten)/ (coll_weight * self.collisionScore + 1)
        # print(self.fitnessScore)
 
     def update_velocity(self):
@@ -576,7 +650,10 @@ class Robot(object):
             self.velR = self.velMin
 
     def move(self):
-
+        """
+        move resolves the kinematics of the robot
+        it also updates the time attribute
+        """
         self.velocity = (self.velL + self.velR) / 2
         # Rotation
         if self.velR == self.velL:
@@ -639,7 +716,8 @@ class Robot(object):
                             self.y -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (
                                 math.sin(math.radians(wall_.angleDeg)))
                             doubleCollision = True
-
+        #increase time
+        self.time += self.dt
         # END COLLISION
 
     def draw(self):
@@ -701,7 +779,8 @@ def run_GA(individuals, proportion, df, GA):
     if len(df) % 10 == 0:
         ax = df.plot()
         fig = ax.get_figure()
-        fig.savefig('Fitness_score_evolution.jpg')
+        #fig.savefig('Fitness_score_evolution.jpg')
+        fig.savefig('Fitness_score_evolution.png')
         df.to_csv('Generation_data.csv')
     #print(df)
     new_population = GA.GAPipeLine(individuals, proportion)
@@ -720,7 +799,7 @@ pygame.display.set_caption("BumbleBeeN'TheHood")
 
 start_point = Point(200, 200)
 
-number_of_individuals = 20
+number_of_individuals = 30
 robots = []
 for i in range(number_of_individuals):
     robots.append(Robot(start_point, 40, 1, 12, 40, 10, 1))
@@ -742,7 +821,7 @@ wall_bottom = Wall(Point(10, 590), Point(790, 590))
 #wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
 walls = [wall_right, wall_left, wall_top, wall_bottom]
-Dust = Dust(70, maxX, maxY, 15)
+Dust = Dust(150, maxX, maxY, 15)
 
 generation = 0
 run = True
@@ -755,8 +834,11 @@ while run:
 
         Dust.renew()
 
+
+        #while robot.time < 100:
         dt = 0
-        while dt < 100:
+        terminate= False
+        while (dt < 5000) and (terminate == False):
 
             bias_x = 0
             bias_y = 0
@@ -765,7 +847,8 @@ while run:
             robot.update_velocity()
             robot.move()
             robot.eat_dust(Dust)
-            robot.fitness_function_1()
+            robot.fitness_function()
+            terminate = robot.terminate_check()
 
             bias_x = robot.x - robot.prev_x
             bias_y = robot.y - robot.prev_y
@@ -779,15 +862,16 @@ while run:
             robot.update_sensors(biasPoint, d_theta)
             robot.calculate_intersection(walls)
             redrawGameWindow()
-
-            dt += 1
+            dt +=1
+        robot.reposition(start_point)
 
         Dust.delete()
 
     robots, df = run_GA(robots, proportion, df, GA)
 
     for robot in robots:
-        robot.reinitialize()
+
+        robot.reinitialize(start_point)
     generation += 1
     print("generation:", generation)
     #redrawGameWindow()
