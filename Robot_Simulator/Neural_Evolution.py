@@ -600,14 +600,15 @@ def run_GA(individuals, proportion, df, GA):
     val = max(getattr(ind, 'fitnessScore') for ind in individuals)
     df_ = pd.DataFrame([{col: val}])
     df = df.append(df_, ignore_index=True)
-    if len(df) % 100 == 0:
+    if len(df) % 10 == 0:
         ax = df.plot()
         fig = ax.get_figure()
         fig.savefig('Fitness_score_evolution.jpg')
-
+        df.to_csv('Generation_data.csv')
+    #print(df)
     new_population = GA.GAPipeLine(individuals, proportion)
 
-    return new_population
+    return new_population, df
 
 
 window_width = 800
@@ -678,7 +679,7 @@ while run:
 
             dt += 1
 
-    robots = run_GA(robots, proportion, df, GA)
+    robots, df = run_GA(robots, proportion, df, GA)
 
     for robot in robots:
         robot.fitnessScore = 0
