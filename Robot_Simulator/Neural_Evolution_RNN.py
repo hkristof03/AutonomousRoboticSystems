@@ -430,6 +430,58 @@ class Wall(object):
     def draw(self):
         pygame.draw.line(win, (0, 0, 0), (self.x1, CorrY(self.y1)), (self.x2, CorrY(self.y2)), 5)
 
+def Layout(type):
+    if type == 'box':
+        wall_right = Wall(Point(790, 10), Point(790, 590))
+        wall_left = Wall(Point(10, 10), Point(10, 590))
+        wall_bottom = Wall(Point(10, 10), Point(790, 10))
+        wall_top = Wall(Point(10, 590), Point(790, 590))
+#wall1 = Wall(Point(300, 0), Point(700, 692.8204))
+        walls = [wall_right, wall_left, wall_top, wall_bottom]
+
+    elif type == 'trapezoid':
+        wall_right = Wall(Point(795, 105), Point(795, 495))
+        wall_left = Wall(Point(5, 5), Point(5, 595))
+        wall_bottom = Wall(Point(5, 5), Point(795, 105))
+        wall_top = Wall(Point(5, 595), Point(795, 495))
+        walls = [wall_right, wall_left, wall_top, wall_bottom]
+    elif type == 'double trapezoid':
+
+        wall_right = Wall(Point(795, 105), Point(795, 495))
+        wall_left = Wall(Point(5, 5), Point(5, 595))
+        wall_bottom = Wall(Point(5, 5), Point(795, 105))
+        wall_top = Wall(Point(5, 595), Point(795, 495))
+
+        wall_in_right = Wall(Point(620, 260), Point(620, 340))
+        wall_in_left = Wall(Point(180, 180), Point(180, 420))
+        wall_in_bottom = Wall(Point(180, 180), Point(620, 260))
+        wall_in_top = Wall(Point(180, 420), Point(620, 340))
+
+        walls = [wall_right, wall_left, wall_top, wall_bottom, wall_in_right, wall_in_left, wall_in_top, wall_in_bottom]
+
+    elif type == 'double box':
+
+        wall_right = Wall(Point(795, 5), Point(795, 595))
+        wall_left = Wall(Point(5, 5), Point(5, 595))
+        wall_bottom = Wall(Point(5, 5), Point(795, 5))
+        wall_top = Wall(Point(5, 595), Point(795, 595))
+
+        wall_in_right = Wall(Point(640, 160), Point(640, 440))
+        wall_in_left = Wall(Point(160, 160), Point(160, 440))
+        wall_in_bottom = Wall(Point(160, 160), Point(640, 160))
+        wall_in_top = Wall(Point(160, 440), Point(640, 440))
+
+        walls = [wall_right, wall_left, wall_top, wall_bottom, wall_in_right, wall_in_left, wall_in_top, wall_in_bottom]
+
+    else:
+        wall_right = Wall(Point(790, 10), Point(790, 590))
+        wall_left = Wall(Point(10, 10), Point(10, 590))
+        wall_bottom = Wall(Point(10, 10), Point(790, 10))
+        wall_top = Wall(Point(10, 590), Point(790, 590))
+        walls = [wall_right, wall_left, wall_top, wall_bottom]
+
+
+    return walls
 
 class Sensor(object):
     def __init__(self, startpoint, endpoint, width):
@@ -884,7 +936,7 @@ win = pygame.display.set_mode((window_width, window_height))
 
 pygame.display.set_caption("BumbleBeeN'TheHood")
 
-start_point = Point(200, 200)
+start_point = Point(100, 100)
 
 number_of_individuals = 30
 robots = []
@@ -900,14 +952,12 @@ df = pd.DataFrame(columns=['Best_fitness_score'])
 proportion = 0.4
 
 
+layout = 'double trapezoid'
 
-wall_right = Wall(Point(790, 10), Point(790, 590))
-wall_left = Wall(Point(10, 10), Point(10, 590))
-wall_top = Wall(Point(10, 10), Point(790, 10))
-wall_bottom = Wall(Point(10, 590), Point(790, 590))
 #wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
-walls = [wall_right, wall_left, wall_top, wall_bottom]
+
+walls = Layout(layout)
 Dust = Dust(150, maxX, maxY, 15)
 
 generation = 0
