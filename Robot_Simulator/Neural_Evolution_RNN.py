@@ -364,13 +364,12 @@ class Dust( object):
         self.maxX = maxX
         self.maxY = maxY
         self.radius = radius
+        self.step = 3 * self.radius
 
-        for i in range(self.speckNumber):
-            x = random.randint(self.radius, self.maxX - self.radius)
-            y = random.randint(self.radius, self.maxY - self.radius)
-            d = dust_speck(Point(x,y), self.radius)
-            self.specks.append(d)
-
+        for x in range (self.step, maxX, self.step):    
+            for y in range (self.step, maxX, self.step):
+                d = dust_speck(Point(x,y), self.radius)
+                self.specks.append(d)
 
     def draw(self):
         for speck in self.specks:
@@ -386,11 +385,10 @@ class Dust( object):
         """
         #for speck in self.specks:
             #self.specks.remove(speck)
-        for i in range(self.speckNumber):
-            x = random.randint(self.radius, self.maxX - self.radius)
-            y = random.randint(self.radius, self.maxY - self.radius)
-            d = dust_speck(Point(x,y), self.radius)
-            self.specks.append(d)
+        for x in range (self.step, maxX, self.step):    
+            for y in range (self.step, maxX, self.step):
+                d = dust_speck(Point(x,y), self.radius)
+                self.specks.append(d)
             #d.draw()
 
 
@@ -676,14 +674,15 @@ class Robot(object):
         self.fitnessScorePrevious = self.fitnessScore
         
         col = 0     #col is used to completely discount the velocity contribution if the object is colliding
-        maxSensorRange = 40
+        maxSensorRange = self.sensor_range
         minDist = maxSensorRange
         for sen in self.sensors:
             if sen.distance < minDist:
                 minDist = sen.distance
 
         sensorFactor = minDist/maxSensorRange
-
+        if minDist <= 4:
+            sensorFactor = 0
 
         if self.collision:
             self.collisionScore +=1 #total dt that the robot has been colliding
@@ -752,7 +751,7 @@ class Robot(object):
     def imminent_collision(self, wall):
 
         self.center = pnt(self.x, self.y)
-        self.circle = self.center.buffer(self.radius + 2).boundary
+        self.circle = self.center.buffer(self.radius).boundary
         collision = self.circle.intersection(wall.bound)
         return collision
 
@@ -941,7 +940,7 @@ start_point = Point(100, 100)
 number_of_individuals = 30
 robots = []
 for i in range(number_of_individuals):
-    robots.append(Robot(start_point, 40, 1, 12, 40, 10, 1))
+    robots.append(Robot(start_point, 30, 1, 12, 60, 10, 1))
     robots[i].create_adjust_sensors()
 
 #Genetic Algorithm class instance
@@ -952,13 +951,13 @@ df = pd.DataFrame(columns=['Best_fitness_score'])
 proportion = 0.4
 
 
-layout = 'double trapezoid'
+layout = 'box'
 
 #wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
 
 walls = Layout(layout)
-Dust = Dust(150, maxX, maxY, 15)
+Dust = Dust(150, maxX, maxY, 8)
 
 generation = 0
 run = True
