@@ -940,7 +940,7 @@ start_point = Point(100, 100)
 number_of_individuals = 30
 robots = []
 for i in range(number_of_individuals):
-    robots.append(Robot(start_point, 30, 1, 12, 60, 10, 1))
+    robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1))
     robots[i].create_adjust_sensors()
 
 #Genetic Algorithm class instance
