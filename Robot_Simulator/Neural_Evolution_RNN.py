@@ -8,8 +8,9 @@ from scipy.special import expit as sigmoid_activation_function
 import random
 from operator import attrgetter
 
+import os
 import pandas as pd
-
+import json
 import time
 
 #from .Definitions import *
@@ -937,23 +938,59 @@ def redrawGameWindow():
     pygame.display.update()
 
 
-def run_GA(individuals, proportion, df, GA):
+def run_GA(individuals, proportion, df, GA, file_name, num_generation):
 
-    lst_dict = []
-    col = 'Best_fitness_score'
-    val = max(getattr(ind, 'fitnessScore') for ind in individuals)
-    df_ = pd.DataFrame([{col: val}])
-    df = df.append(df_, ignore_index=True)
-    if len(df) % 10 == 0:
-        ax = df.plot()
-        fig = ax.get_figure()
-        #fig.savefig('Fitness_score_evolution.jpg')
-        fig.savefig('Fitness_score_evolution.png')
-        df.to_csv('Generation_data.csv')
-    #print(df)
+    df = append_to_json_df(individuals, file_name, df, num_generation)
     new_population = GA.GAPipeLine(individuals, proportion)
 
     return new_population, df
+
+def append_to_json_df(individuals, file_name, df, num_generation):
+    lst_dict = []
+    d = {}
+    g = {}
+    col_bf = 'Best_fitness_score'
+    val_bf = max(getattr(ind, 'fitnessScore') for ind in individuals)
+    col_mf = 'Minimum_fitness_score'
+    val_mf = min(getattr(ind, 'fitnessScore') for ind in individuals)
+    d[col_bf], d[col_mf] = val_bf, val_mf
+    objects = individuals
+    objects.sort(key=lambda x: x.fitnessScore, reverse=True)
+    objects = objects[:5]
+    name = "Best_"
+    for i in range(len(objects)):
+        chromosome = objects[i].NN.create_chromosome()
+        d[name + str(i+1)] = chromosome.tolist()
+
+    g['Generation_' + str(num_generation)] = d
+
+    if os.path.isfile('./' + file_name):
+        with open(file_name) as f:
+            data = json.load(f)
+        data.update(g)
+        with open(file_name, 'w') as f:
+            json.dump(data, f)
+
+    else:
+        with open(file_name, 'w') as f:
+            json.dump(g, f)
+
+    df_ = pd.DataFrame([{col_bf:val_bf, col_mf:val_mf}])
+    df = df.append(df_, ignore_index=True)
+    df.to_csv('Generation_data.csv')
+
+    return df
+
+
+def read_weights_from_json(file_name, generations_num, best_num):
+    '''
+    generations_num: In which generation we want the weights.
+    best_num: Which weights to chose from the top x saved individuals.
+    '''
+    with open(file_name) as f:
+        data = json.load(f)
+    weights = data['Generation_' + str(generations_num)]['Best_' + str(best_num)]
+    return np.asarray(weights)
 
 
 window_width = 800
@@ -990,6 +1027,7 @@ layout = 'box'
 walls = Layout(layout)
 Dust = Dust(150, maxX, maxY, 8)
 
+file_name = 'Generations_data.json'
 generation = 0
 run = True
 while run:
@@ -1036,7 +1074,7 @@ while run:
 
         Dust.delete()
 
-    robots, df = run_GA(robots, proportion, df, GA)
+    robots, df = robots, df = run_GA(robots, proportion, df, GA, file_name, generation)
 
     for robot in robots:
 
