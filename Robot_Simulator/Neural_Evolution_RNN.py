@@ -156,19 +156,40 @@ class GeneticAlgorithm(object):
 
         return individual
 
+    def mutAddRandomWeight(self, individual, mut_chance):
+        """
+        Mutation method by adding a normally distributed around 0
+        weight to each weight of the individual, by chance mut_chance.
+        The standard deviation we use is found by dividing the 
+        maximum number by 3
+        """
+        size = len(individual)
+        mut_index= random.randint(0, (size - 1))
+        sd = max(individual) /3 
+        for i in range(size):
+            if random.random() < mut_chance:
+                individual[i] += np.random.normal(0, sd)
+        return individual
+
+
+
     def GAPipeLine(self, individuals, proportion):
         #parents and children number
+        #add two to children, and remove them at the end
         pk = int(len(individuals) * proportion)
         ck = int(len(individuals) - pk)
         chosen_1 = self.selRoulette(individuals, pk)
-        chosen_2 = self.selRoulette(chosen_1, ck)
+        chosen_2 = self.selRoulette(chosen_1, ck + 2)
         offsprings = []
+        mut_chance = 0.05
 
         print("len individuals:", len(individuals))
+        print(len(chosen_1), "parents")
+        print(len(chosen_2), "children")
 
         i_ = 0
         step = 2
-        while i_ < ck:
+        while i_ < (ck):
             print("i_ before parents:", i_)
             parent_1 = chosen_2[i_].NN.create_chromosome()
             parent_2 = chosen_2[i_ + 1].NN.create_chromosome()
@@ -178,13 +199,22 @@ class GeneticAlgorithm(object):
             i_ = i_ + step
             print("i_ at end:", i_)
 
+        
+        del chosen_2[-1]
+        del chosen_2[-1]
+
         mutated_offsprings = []
         for i_ in range(len(offsprings)):
-            mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
+            #mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
+            mo = self.mutAddRandomWeight(offsprings[i_], mut_chance)
             mutated_offsprings.append(mo)
 
+        print(len(chosen_1))
+        print(len(chosen_2))
+        print(len(mutated_offsprings))
         for i_ in range(len(chosen_2)):
             chosen_2[i_].NN.update_weights(mutated_offsprings[i_])
+
 
         new_population = chosen_1 + chosen_2
         print("len new population:", len(new_population))
@@ -571,8 +601,8 @@ class Robot(object):
         self.terminateTimer = 0
         self.terminateLimit = 200
         #Neural Network
-        self.NN = NeuralNetwork(12, 2, 6)
-        self.RNN = RecurrentNeuralNetwork(12, 2, 6)
+        #self.NN = NeuralNetwork(12, 2, 12)
+        self.NN = RecurrentNeuralNetwork(12, 2, 12)
 
 
     def eat_dust(self, Dust):
@@ -729,7 +759,7 @@ class Robot(object):
             distances.append(sen.distance)
         prev_velocities.append(self.velL)
         prev_velocities.append(self.velR)
-        velocities = self.RNN.run(distances, prev_velocities)
+        velocities = self.NN.run(distances, prev_velocities)
         self.velL, self.velR = velocities[0], velocities[1]
 
     def calculate_intersection(self, walls):
@@ -937,7 +967,8 @@ pygame.display.set_caption("BumbleBeeN'TheHood")
 
 start_point = Point(100, 100)
 
-number_of_individuals = 30
+number_of_individuals = 28
+number_of_winners = 8
 robots = []
 for i in range(number_of_individuals):
     robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1))
@@ -948,7 +979,7 @@ GA = GeneticAlgorithm()
 #DataFrame that stores Historical data for plotting
 df = pd.DataFrame(columns=['Best_fitness_score'])
 #parents and children proportion
-proportion = 0.4
+proportion = 0.25
 
 
 layout = 'box'
@@ -974,7 +1005,7 @@ while run:
         #while robot.time < 100:
         dt = 0
         terminate= False
-        while (dt < 3000) and (terminate == False):
+        while (dt < 2000) and (terminate == False):
 
             bias_x = 0
             bias_y = 0
