@@ -7,14 +7,15 @@ from scipy.stats import truncnorm
 from scipy.special import expit as sigmoid_activation_function
 import random
 from operator import attrgetter
+from statistics import mean
 
 import os
 import pandas as pd
 import json
 import time
 
-#from .Definitions import *
-#from Definitions import *
+# from .Definitions import *
+# from Definitions import *
 
 global win
 
@@ -36,7 +37,7 @@ class GeneticAlgorithm(object):
     def __init__(self):
         pass
 
-    #Population is created from NNs in the Robot
+    # Population is created from NNs in the Robot
 
     def selRandom(self, individuals, k):
         """Select *k* individuals at random from the input *individuals* with
@@ -113,7 +114,8 @@ class GeneticAlgorithm(object):
         offspring_1, offspring_2 = parent_1, parent_2
         size = min(len(parent_1), len(parent_2))
         crossover_point = random.randint(1, size - 1)
-        offspring_1[crossover_point:], offspring_2[crossover_point:] = parent_2[crossover_point:], parent_1[crossover_point:]
+        offspring_1[crossover_point:], offspring_2[crossover_point:] = parent_2[crossover_point:], parent_1[
+                                                                                                   crossover_point:]
 
         return offspring_1, offspring_2
 
@@ -161,45 +163,27 @@ class GeneticAlgorithm(object):
         """
         Mutation method by adding a normally distributed around 0
         weight to each weight of the individual, by chance mut_chance.
-        The standard deviation we use is found by dividing the 
+        The standard deviation we use is found by dividing the
         maximum number by 3
         """
         size = len(individual)
-        mut_index= random.randint(0, (size - 1))
-        sd = max(individual) /2 
+        mut_index = random.randint(0, (size - 1))
+        sd = max(individual) / 3
         for i in range(size):
             if random.random() < mut_chance:
                 individual[i] += np.random.normal(0, sd)
         return individual
 
-
-
     def GAPipeLine(self, individuals, pk, ck):
-        """
-        parents and children number are pk and ck
-        champion (best fitted individual) is used to correct
-        some list bug.
-
-        This algorithm gets a number of elites, chosen by the elitism method
-        as parents, then adds some more random individuals, to ensure
-        genetic variation.
-
-        """
+        # parents and children number
+        # add two to children, and remove them at the end
         champion = self.selBest(individuals, 1)
-        tournsize = 3
-        elites = int(pk* 0.8)
-        geneVar = int(pk - elites)
-        mut_chance = 0.2
-
-        chosen_0 = self.selBest(individuals, elites)
-        chosen_00 = self.selRandom(individuals, geneVar)
-        chosen_1 = chosen_0 + chosen_00
+        chosen_1 = self.selRoulette(individuals, pk)
         chosen_2 = self.selRoulette(chosen_1, ck + 2)
-
 
         print("len individuals:", len(individuals))
         print(len(chosen_1), "parents")
-        print(len(chosen_2) - 2, "children")
+        print(len(chosen_2), "children")
 
         if (len(chosen_1) < pk):
             for j in range(pk - len(chosen_1)):
@@ -208,41 +192,38 @@ class GeneticAlgorithm(object):
             for k in range(ck + 2 - len(chosen_2)):
                 chosen_2.append(champion[0])
         offsprings = []
-        
+        mut_chance = 0.05
 
         print("len individuals:", len(individuals))
         print(len(chosen_1), "parents corrected")
-        print(len(chosen_2) - 2, "children corrected")
+        print(len(chosen_2), "children corrected")
 
         i_ = 0
         step = 2
-        for j in range (len(chosen_1) - 1):
-            for k in range(j, len(chosen_1)):
-                parent_1 = chosen_1[j].NN.create_chromosome()
-                parent_2 = chosen_2[k].NN.create_chromosome()
-                offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
-                offsprings.append(offs_1)
-                    #offsprings.append(offs_2)
+        while i_ < (ck):
+            print("i_ before parents:", i_)
+            parent_1 = chosen_2[i_].NN.create_chromosome()
+            parent_2 = chosen_2[i_ + 1].NN.create_chromosome()
+            offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
+            offsprings.append(offs_1)
+            offsprings.append(offs_2)
+            i_ = i_ + step
+            print("i_ at end:", i_)
 
-        
-
-        print(len(offsprings), 'children')
-
-        
         del chosen_2[-1]
         del chosen_2[-1]
 
         mutated_offsprings = []
-        for i_ in range(len(individuals) - pk):
-            #mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
+        for i_ in range(len(offsprings)):
+            # mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
             mo = self.mutAddRandomWeight(offsprings[i_], mut_chance)
             mutated_offsprings.append(mo)
 
-
-        print(len(mutated_offsprings), 'children')
+        print(len(chosen_1))
+        print(len(chosen_2))
+        print(len(mutated_offsprings))
         for i_ in range(len(chosen_2)):
             chosen_2[i_].NN.update_weights(mutated_offsprings[i_])
-
 
         new_population = chosen_1 + chosen_2
         print("len new population:", len(new_population))
@@ -300,7 +281,7 @@ class NeuralNetwork(object):
         Running the network with an input vector input_vector, which can be a tuple,
         list or ndarray.
         '''
-        #turning the input vector into a column vector
+        # turning the input vector into a column vector
         input_vector = np.array(input_vector, ndmin=2).T
         output_vector = np.dot(self.weights_in_hidden, input_vector)
         output_vector = np.tanh(output_vector)
@@ -323,8 +304,9 @@ class RecurrentNeuralNetwork(object):
         self.weights_in_hidden = np.zeros(shape=(self.no_of_hidden_nodes, self.no_of_in_nodes))
         self.weights_hidden_out = np.zeros(shape=(self.no_of_out_nodes, self.no_of_hidden_nodes))
         self.weights_recurrent_hidden = np.zeros(shape=(self.no_of_recurrent_nodes, self.no_of_hidden_nodes))
-        self.weights_out_recurrent = np.ones(shape=(self.no_of_out_nodes, self.no_of_recurrent_nodes)) #this remains useless for now, because we just use
-        self.create_weight_matrices()                                                                  # the previous velocities as input
+        self.weights_out_recurrent = np.ones(shape=(
+        self.no_of_out_nodes, self.no_of_recurrent_nodes))  # this remains useless for now, because we just use
+        self.create_weight_matrices()  # the previous velocities as input
 
     def create_weight_matrices(self):
         '''
@@ -348,7 +330,7 @@ class RecurrentNeuralNetwork(object):
 
         rad = 1 / np.sqrt(self.no_of_hidden_nodes)
         X = self.truncated_normal(mean=0, sd=1, low=-rad, upp=rad)
-        self.weights_recurrent_hidden = X.rvs((self.no_of_hidden_nodes, self.no_of_out_nodes ))
+        self.weights_recurrent_hidden = X.rvs((self.no_of_hidden_nodes, self.no_of_out_nodes))
 
     def truncated_normal(self, mean=0, sd=1, low=0, upp=10):
         return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
@@ -362,7 +344,7 @@ class RecurrentNeuralNetwork(object):
 
     def update_weights(self, chromosome):
         ih_weight_no = self.no_of_in_nodes * self.no_of_hidden_nodes
-        ho_weight_no = self.no_of_hidden_nodes * self.no_of_out_nodes 
+        ho_weight_no = self.no_of_hidden_nodes * self.no_of_out_nodes
         self.weights_in_hidden = chromosome[:ih_weight_no].reshape(
             self.no_of_hidden_nodes,
             self.no_of_in_nodes)
@@ -373,12 +355,12 @@ class RecurrentNeuralNetwork(object):
             self.no_of_hidden_nodes,
             self.no_of_recurrent_nodes)
 
-    def run(self, input_vector, prev_output_vector): #ONLY THIS REMAINS
+    def run(self, input_vector, prev_output_vector):  # ONLY THIS REMAINS
         '''
         Running the network with an input vector input_vector, which can be a tuple,
         list or ndarray.
         '''
-        #turning the input vector into a column vector
+        # turning the input vector into a column vector
         input_vector = np.array(input_vector, ndmin=2).T
         output_vector = np.dot(self.weights_in_hidden, input_vector)
 
@@ -388,12 +370,10 @@ class RecurrentNeuralNetwork(object):
         output_vector += output_vector + recurrent_vector
         output_vector = np.tanh(output_vector)
 
-
         output_vector = np.dot(self.weights_hidden_out, output_vector)
         output_vector = np.tanh(output_vector) * 6
 
         return [item for sublist in output_vector for item in sublist]
-
 
 
 def CorrY(y):
@@ -409,13 +389,14 @@ class Point(object):
         return math.sqrt((object.x - self.x) ** 2 + (object.y - self.y) ** 2)
 
 
-class Dust( object):
+class Dust(object):
     """
     Creates the dust for the whole map, comprised of the individual dust specks
     defined by the dust_speck class
 
     delete method destroys the remaining dust specks for each cicle
     """
+
     def __init__(self, speckNumber, maxX, maxY, radius):
         self.specks = []
         self.speckNumber = speckNumber
@@ -424,15 +405,15 @@ class Dust( object):
         self.radius = radius
         self.step = 3 * self.radius
 
-        for x in range (self.step, maxX, self.step):    
-            for y in range (self.step, maxX, self.step):
-                d = dust_speck(Point(x,y), self.radius)
+        for x in range(self.step, maxX, self.step):
+            for y in range(self.step, maxX, self.step):
+                d = dust_speck(Point(x, y), self.radius)
                 self.specks.append(d)
 
     def draw(self):
         for speck in self.specks:
             speck.draw()
-            
+
     def delete(self):
         for speck in self.specks:
             self.specks.remove(speck)
@@ -441,32 +422,27 @@ class Dust( object):
         """
         Creates the new dust for each time
         """
-        #for speck in self.specks:
-            #self.specks.remove(speck)
-        for x in range (self.step, maxX, self.step):    
-            for y in range (self.step, maxX, self.step):
-                d = dust_speck(Point(x,y), self.radius)
+        # for speck in self.specks:
+        # self.specks.remove(speck)
+        for x in range(self.step, maxX, self.step):
+            for y in range(self.step, maxX, self.step):
+                d = dust_speck(Point(x, y), self.radius)
                 self.specks.append(d)
-            #d.draw()
-
-
-
+            # d.draw()
 
 
 class dust_speck(object):
     """
     Creates the dust
     """
+
     def __init__(self, point, radius):
         self.x = point.x
         self.y = point.y
         self.rad = radius
+
     def draw(self):
-        pygame.gfxdraw.filled_circle(win, self.x, CorrY(self.y), self.rad, BROWN)   
-
-
-
-
+        pygame.gfxdraw.filled_circle(win, self.x, CorrY(self.y), self.rad, BROWN)
 
 
 class Wall(object):
@@ -486,13 +462,14 @@ class Wall(object):
     def draw(self):
         pygame.draw.line(win, (0, 0, 0), (self.x1, CorrY(self.y1)), (self.x2, CorrY(self.y2)), 5)
 
+
 def Layout(type):
     if type == 'box':
         wall_right = Wall(Point(790, 10), Point(790, 590))
         wall_left = Wall(Point(10, 10), Point(10, 590))
         wall_bottom = Wall(Point(10, 10), Point(790, 10))
         wall_top = Wall(Point(10, 590), Point(790, 590))
-#wall1 = Wall(Point(300, 0), Point(700, 692.8204))
+        # wall1 = Wall(Point(300, 0), Point(700, 692.8204))
         walls = [wall_right, wall_left, wall_top, wall_bottom]
 
     elif type == 'trapezoid':
@@ -536,8 +513,8 @@ def Layout(type):
         wall_top = Wall(Point(10, 590), Point(790, 590))
         walls = [wall_right, wall_left, wall_top, wall_bottom]
 
-
     return walls
+
 
 class Sensor(object):
     def __init__(self, startpoint, endpoint, width):
@@ -628,11 +605,9 @@ class Robot(object):
         self.time = 0
         self.terminateTimer = 0
         self.terminateLimit = 200
-        #Neural Network
-        #self.NN = NeuralNetwork(12, 2, 12)
+        # Neural Network
+        # self.NN = NeuralNetwork(12, 2, 12)
         self.NN = RecurrentNeuralNetwork(12, 2, 12)
-
-
 
     def eat_dust(self, Dust):
         """
@@ -643,7 +618,7 @@ class Robot(object):
         """
         self.prev_DustEaten = self.dustEaten
         for speck in Dust.specks:
-            if (speck.x - self.x)**2 + (speck.y - self.y)**2 <= (self.radius + speck.rad/2)**2:
+            if (speck.x - self.x) ** 2 + (speck.y - self.y) ** 2 <= (self.radius + speck.rad / 2) ** 2:
                 Dust.specks.remove(speck)
                 self.dustEaten += 1
 
@@ -657,19 +632,16 @@ class Robot(object):
         self.terminateTimer = 0
         self.x = point.x
         self.y = point.y
-        self.angleDeg = random.randint(0,360) 
+        self.angleDeg = random.randint(0, 360)
         self.theta = math.radians(self.angleDeg)
-        self.prev_theta = self.theta 
-
-
+        self.prev_theta = self.theta
 
     def reposition(self, point):
         self.x = point.x
         self.y = point.y
-        self.angleDeg = random.randint(0,360) 
+        self.angleDeg = random.randint(0, 360)
         self.theta = math.radians(self.angleDeg)
-        self.prev_theta = self.theta 
-        self.time = 0
+        self.prev_theta = self.theta
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -685,47 +657,42 @@ class Robot(object):
             # last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
-   # def terminate_check_orig(self):
+        # def terminate_check_orig(self):
         """
         Checks (after 10 timesteps)if the fitnessScore has not increased. 
         If terminateLimit timesteps have passed, where the timestep does not increase, it 
         terminates the simulation.
         It also terminates the simulation after 2000 timesteps
         """
+
     #    terminate = False
-     #   if self.time>=10:
-      #      if self.fitnessScorePrevious >= self.fitnessScore:
-       #         self.terminateTimer += 1
-        #    else:
-         #       self.terminateTimer = 0
-          #  if self.terminateTimer > self.terminateLimit:
-           #     terminate = True
-            #    self.terminateTimer = 0
-      #  return terminate
+    #   if self.time>=10:
+    #      if self.fitnessScorePrevious >= self.fitnessScore:
+    #         self.terminateTimer += 1
+    #    else:
+    #       self.terminateTimer = 0
+    #  if self.terminateTimer > self.terminateLimit:
+    #     terminate = True
+    #    self.terminateTimer = 0
+    #  return terminate
 
     def terminate_check(self):
         """
-        Checks (after 10 timesteps)if the fitnessScore has not increased. 
-        If terminateLimit timesteps have passed, where the timestep does not increase, it 
+        Checks (after 10 timesteps)if the fitnessScore has not increased.
+        If terminateLimit timesteps have passed, where the timestep does not increase, it
         terminates the simulation.
         It also terminates the simulation after 2000 timesteps
         """
         terminate = False
-        collisionLimit = 30
-        if self.time>=10:
+        if self.time >= 10:
             if self.prev_DustEaten >= self.dustEaten:
                 self.terminateTimer += 1
             else:
                 self.terminateTimer = 0
-            if (self.terminateTimer > self.terminateLimit):
+            if self.terminateTimer > self.terminateLimit:
                 terminate = True
                 self.terminateTimer = 0
         return terminate
-
-
-
-
-
 
     def fitness_function(self):
         """
@@ -733,37 +700,25 @@ class Robot(object):
         from the slides
         """
         self.fitnessScorePrevious = self.fitnessScore
-        
-        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+
+        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
         maxSensorRange = self.sensor_range
         minDist = maxSensorRange
         for sen in self.sensors:
             if sen.distance < minDist:
                 minDist = sen.distance
-        dust_weight = 5
-        collision_weight = 10
 
-        sensorFactor = minDist/maxSensorRange
+        sensorFactor = minDist / maxSensorRange
         if minDist <= 4:
             sensorFactor = 0
 
-        if minDist == 0:
-            self.collisionScore +=1 #total dt that the robot has been colliding
+        if self.collision:
+            self.collisionScore += 1  # total dt that the robot has been colliding
             col = 1
-        #print(self.collisionScore)
 
-        self.fitnessScore += (abs(self.velocity)*(1 - math.sqrt(abs(self.velL - self.velR)/self.velMax)) / (self.collisionScore + 1))  
-
-       # self.fitnessScore = (dust_weight * self.dustEaten - collision_weight * self.collisionScore)/(self.time + 1)
-
-
-
-
-        #self.fitnessScore += (abs(self.velocity)*(1 - math.sqrt(abs(self.velL - self.velR)/self.velMax)) + 
-         #                       dust_weight * (self.dustEaten - self.prev_DustEaten)) * sensorFactor
-        #print(self.fitnessScore)
-
-
+        self.fitnessScore += abs(self.velocity) * (
+                    1 - math.sqrt(abs(self.velL - self.velR) / self.velMax)) * sensorFactor
+        # print(self.fitnessScore)
 
     def fitness_function_omega_1(self, gen):
         """
@@ -772,27 +727,21 @@ class Robot(object):
         Omega divided by velocity contributes negatively to discourage spinning
         """
         self.fitnessScorePrevious = self.fitnessScore
-        if gen<= 5:
+        if gen <= 5:
             coll_weight = -5
         else:
-            coll_weight = -50 #constant to adjust weight of collisions
-        dust_weight = 10   #constant to adjust weight of velocity
-        col = 0     #col is used to completely discount the velocity contribution if the object is colliding
+            coll_weight = -50  # constant to adjust weight of collisions
+        dust_weight = 10  # constant to adjust weight of velocity
+        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
         rot_weight = -1
 
         if self.collision:
-            self.collisionScore +=1 #total dt that the robot has been colliding
+            self.collisionScore += 1  # total dt that the robot has been colliding
             col = 1
 
-        self.fitnessScore = coll_weight * self.collisionScore + dust_weight  * self.dustEaten #+ rot_weight * abs((abs(self.omega)/(abs(self.velocity)+1)))
-        #print(self.fitnessScore)
+        self.fitnessScore = coll_weight * self.collisionScore + dust_weight * self.dustEaten  # + rot_weight * abs((abs(self.omega)/(abs(self.velocity)+1)))
+        # print(self.fitnessScore)
 
-    #def update_velocity(self):
-    #    distances = []
-    #    for sen in self.sensors:
-    #        distances.append(sen.distance)
-    #    velocities = self.NN.run(distances)
-    #    self.velL, self.velR = velocities[0], velocities[1]
 
     def update_velocity(self):
         distances = []
@@ -810,13 +759,10 @@ class Robot(object):
             s2 = LineString([(sen.x1, sen.y1), (sen.x2, sen.y2)])
 
             for wall_ in walls:
-                # FIX_AFTER
-                # s1 = LineString([(wall_.x1, wall_.y1), (wall_.x2, wall_.y2)])
                 ip = s2.intersection(wall_.bound)
                 if ip:
                     sen.calculate_distance(ip)
                     break
-                    # print("distance:", sen.distance)
                 else:
                     sen.distance = int(self.sensor_range - self.radius)
 
@@ -926,7 +872,7 @@ class Robot(object):
                             self.y -= self.velocity * (math.cos(self.theta - math.radians(wall_.angleDeg))) * (
                                 math.sin(math.radians(wall_.angleDeg)))
                             doubleCollision = True
-        #increase time
+        # increase time
         self.time += self.dt
         # END COLLISION
 
@@ -979,33 +925,30 @@ def redrawGameWindow():
     pygame.display.update()
 
 
-def run_GA(individuals, parents_num, children_num, df, GA, file_name, num_generation):
-
-    df = append_to_json_df(individuals, file_name, df, num_generation)
+def run_GA(individuals, parents_num, children_num, df, filename_df, GA, file_name, num_generation):
+    df = append_to_json_df(individuals, file_name, df, file_name_df, num_generation)
     new_population = GA.GAPipeLine(individuals, parents_num, children_num)
 
     return new_population, df
 
-def append_to_json_df(individuals, file_name, df, num_generation):
+
+def append_to_json_df(individuals, file_name, df, filename_df, num_generation):
     lst_dict = []
     d = {}
     g = {}
-    col_af = 'Average_fitness_score'
-    val_af = sum(getattr(ind, 'fitnessScore') for ind in individuals)/len(individuals)
-    col_bf = 'Best_fitness_score'
-    val_bf = max(getattr(ind, 'fitnessScore') for ind in individuals)
-    col_mf = 'Minimum_fitness_score'
-    val_mf = min(getattr(ind, 'fitnessScore') for ind in individuals)
-    d[col_af], d[col_bf], d[col_mf] = val_af, val_bf, val_mf
     objects = individuals
     objects.sort(key=lambda x: x.fitnessScore, reverse=True)
-    objects = objects[:5]
-    name = "Best_"
-    for i in range(len(objects)):
-        chromosome_ = objects[i].NN.create_chromosome()
-        d[name + str(i+1)] = chromosome_.tolist()
 
-    g['Generation_' + str(num_generation)] = d
+    col_bf = 'Best_fitness_score'
+    #val_bf = max(getattr(ind, 'fitnessScore') for ind in individuals)
+    val_bf = max(ind.fitnessScore for ind in individuals)
+    col_mf = 'Minimum_fitness_score'
+    #val_mf = min(getattr(ind, 'fitnessScore') for ind in individuals)
+    val_mf = min(ind.fitnessScore for ind in individuals)
+    col_avg = 'AVG_fitnessScore'
+    val_avg = mean(x.fitnessScore for x in objects)
+    d[col_bf], d[col_mf], d[col_avg] = val_bf, val_mf, val_avg
+    name = "Best_"
 
     if os.path.isfile('./' + file_name):
         with open(file_name) as f:
@@ -1018,14 +961,11 @@ def append_to_json_df(individuals, file_name, df, num_generation):
         with open(file_name, 'w') as f:
             json.dump(g, f)
 
-    df_ = pd.DataFrame([{col_af:val_af, col_bf:val_bf, col_mf:val_mf}])
+    df_ = pd.DataFrame([{col_bf: val_bf, col_mf: val_mf, col_avg: val_avg}])
     df = df.append(df_, ignore_index=True)
-    df.to_csv('Generation_data.csv')
+    df.to_csv(filename_df, index=False)
 
     return df
-
-
-
 
 
 def read_weights_from_json(file_name, generations_num, best_num):
@@ -1050,32 +990,33 @@ pygame.display.set_caption("BumbleBeeN'TheHood")
 
 start_point = Point(100, 100)
 
-number_of_individuals = 32
+number_of_individuals = 28
+number_of_winners = 8
 robots = []
 for i in range(number_of_individuals):
-    robots.append(Robot(start_point, 30, 1, 12, 60, 10, 1))
+    robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1))
     robots[i].create_adjust_sensors()
 
-#Genetic Algorithm class instance
+# Genetic Algorithm class instance
 GA = GeneticAlgorithm()
-#DataFrame that stores Historical data for plotting
-df = pd.DataFrame(columns=['Average_fitness_score', 'Best_fitness_score', 'Minimum_fitness_score'])
-#parents and children proportion
+# DataFrame that stores Historical data for plotting
+df = pd.DataFrame(columns=['Best_fitness_score', 'Minimum_fitness_score', 'AVG_fitnessScore'])
+# parents and children proportion
 proportion = 0.25
 
-pk = int(number_of_individuals * proportion)    #parents number
-ck = int(number_of_individuals - pk)            #children number
-
+pk = int(number_of_individuals * proportion)  # parents number
+ck = int(number_of_individuals - pk)  # children number
 
 layout = 'box'
 
-#wall1 = Wall(Point(300, 0), Point(700, 692.8204))
+# wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
 
 walls = Layout(layout)
 Dust = Dust(150, maxX, maxY, 8)
 
-file_name = 'Generations_data.json'
+file_name = 'Generations_data_test.json'
+file_name_df = 'Generations_data_test.csv'
 generation = 0
 run = True
 while run:
@@ -1084,15 +1025,12 @@ while run:
 
     for robot in robots:
 
-
         Dust.renew()
 
-
-        #while robot.time < 100:
+        # while robot.time < 100:
         dt = 0
-        terminate= False
-        while (dt < 2000) and (terminate == False):
-
+        terminate = False
+        while (dt < 200) and (terminate == False):
             bias_x = 0
             bias_y = 0
             d_theta = 0
@@ -1100,7 +1038,6 @@ while run:
             robot.update_velocity()
             robot.move()
             robot.eat_dust(Dust)
-
 
             bias_x = robot.x - robot.prev_x
             bias_y = robot.y - robot.prev_y
@@ -1117,20 +1054,19 @@ while run:
             robot.fitness_function()
             terminate = robot.terminate_check()
             redrawGameWindow()
-            dt +=robot.dt
+            dt += robot.dt
         robot.reposition(start_point)
 
         Dust.delete()
 
-    robots, df = run_GA(robots, pk, ck, df, GA, file_name, generation)
+    robots, df = run_GA(robots, pk, ck, df, file_name_df, GA, file_name, generation)
 
     for robot in robots:
-
         robot.reinitialize(start_point)
     generation += 1
     print("generation:", generation)
-    #redrawGameWindow()
+    # redrawGameWindow()
 
-    #time.sleep(0.5)
+    # time.sleep(0.5)
 
 pygame.quit()
