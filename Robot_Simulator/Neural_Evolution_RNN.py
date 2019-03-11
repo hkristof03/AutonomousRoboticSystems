@@ -787,7 +787,7 @@ class Robot(object):
                     break
                     # print("distance:", sen.distance)
                 else:
-                    sen.distance = int(self.sensor_range / 2)
+                    sen.distance = int(self.sensor_range - self.radius)
 
     def imminent_collision(self, wall):
 
@@ -987,10 +987,20 @@ def append_to_json_df(individuals, file_name, df, num_generation):
 
     df_ = pd.DataFrame([{col_bf:val_bf, col_mf:val_mf}])
     df = df.append(df_, ignore_index=True)
+
+
+
     df.to_csv('Generation_data.csv')
 
     return df
 
+def plot(df):
+
+    if len(df) % 10 == 0:
+        ax = df.plot()
+        fig = ax.get_figure()
+        #fig.savefig('Fitness_score_evolution.jpg')
+        fig.savefig('Fitness_score_evolution.png')
 
 def read_weights_from_json(file_name, generations_num, best_num):
     '''
