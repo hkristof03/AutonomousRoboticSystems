@@ -166,7 +166,7 @@ class GeneticAlgorithm(object):
         """
         size = len(individual)
         mut_index= random.randint(0, (size - 1))
-        sd = max(individual) /3 
+        sd = max(individual) /2 
         for i in range(size):
             if random.random() < mut_chance:
                 individual[i] += np.random.normal(0, sd)
@@ -175,15 +175,31 @@ class GeneticAlgorithm(object):
 
 
     def GAPipeLine(self, individuals, pk, ck):
-        #parents and children number
-        #add two to children, and remove them at the end
+        """
+        parents and children number are pk and ck
+        champion (best fitted individual) is used to correct
+        some list bug.
+
+        This algorithm gets a number of elites, chosen by the elitism method
+        as parents, then adds some more random individuals, to ensure
+        genetic variation.
+
+        """
         champion = self.selBest(individuals, 1)
-        chosen_1 = self.selRoulette(individuals, pk)
+        tournsize = 3
+        elites = int(pk* 0.8)
+        geneVar = int(pk - elites)
+        mut_chance = 0.2
+
+        chosen_0 = self.selBest(individuals, elites)
+        chosen_00 = self.selRandom(individuals, geneVar)
+        chosen_1 = chosen_0 + chosen_00
         chosen_2 = self.selRoulette(chosen_1, ck + 2)
+
 
         print("len individuals:", len(individuals))
         print(len(chosen_1), "parents")
-        print(len(chosen_2), "children")
+        print(len(chosen_2) - 2, "children")
 
         if (len(chosen_1) < pk):
             for j in range(pk - len(chosen_1)):
@@ -192,37 +208,38 @@ class GeneticAlgorithm(object):
             for k in range(ck + 2 - len(chosen_2)):
                 chosen_2.append(champion[0])
         offsprings = []
-        mut_chance = 0.05
+        
 
         print("len individuals:", len(individuals))
         print(len(chosen_1), "parents corrected")
-        print(len(chosen_2), "children corrected")
+        print(len(chosen_2) - 2, "children corrected")
 
         i_ = 0
         step = 2
-        while i_ < (ck):
-            print("i_ before parents:", i_)
-            parent_1 = chosen_2[i_].NN.create_chromosome()
-            parent_2 = chosen_2[i_ + 1].NN.create_chromosome()
-            offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
-            offsprings.append(offs_1)
-            offsprings.append(offs_2)
-            i_ = i_ + step
-            print("i_ at end:", i_)
+        for j in range (len(chosen_1) - 1):
+            for k in range(j, len(chosen_1)):
+                parent_1 = chosen_1[j].NN.create_chromosome()
+                parent_2 = chosen_2[k].NN.create_chromosome()
+                offs_1, offs_2 = self.one_point_crossover(parent_1, parent_2)
+                offsprings.append(offs_1)
+                    #offsprings.append(offs_2)
+
+        
+
+        print(len(offsprings), 'children')
 
         
         del chosen_2[-1]
         del chosen_2[-1]
 
         mutated_offsprings = []
-        for i_ in range(len(offsprings)):
+        for i_ in range(len(individuals) - pk):
             #mo = self.mutShuffleIndexes(offsprings[i_], 0.1)
             mo = self.mutAddRandomWeight(offsprings[i_], mut_chance)
             mutated_offsprings.append(mo)
 
-        print(len(chosen_1))
-        print(len(chosen_2))
-        print(len(mutated_offsprings))
+
+        print(len(mutated_offsprings), 'children')
         for i_ in range(len(chosen_2)):
             chosen_2[i_].NN.update_weights(mutated_offsprings[i_])
 
@@ -616,6 +633,7 @@ class Robot(object):
         self.NN = RecurrentNeuralNetwork(12, 2, 12)
 
 
+
     def eat_dust(self, Dust):
         """
         Checks if a dust_speck's center is inside the rumba. If so it gets
@@ -651,6 +669,7 @@ class Robot(object):
         self.angleDeg = random.randint(0,360) 
         self.theta = math.radians(self.angleDeg)
         self.prev_theta = self.theta 
+        self.time = 0
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -692,12 +711,13 @@ class Robot(object):
         It also terminates the simulation after 2000 timesteps
         """
         terminate = False
+        collisionLimit = 30
         if self.time>=10:
             if self.prev_DustEaten >= self.dustEaten:
                 self.terminateTimer += 1
             else:
                 self.terminateTimer = 0
-            if self.terminateTimer > self.terminateLimit:
+            if (self.terminateTimer > self.terminateLimit):
                 terminate = True
                 self.terminateTimer = 0
         return terminate
@@ -720,16 +740,27 @@ class Robot(object):
         for sen in self.sensors:
             if sen.distance < minDist:
                 minDist = sen.distance
+        dust_weight = 5
+        collision_weight = 10
 
         sensorFactor = minDist/maxSensorRange
         if minDist <= 4:
             sensorFactor = 0
 
-        if self.collision:
+        if minDist == 0:
             self.collisionScore +=1 #total dt that the robot has been colliding
             col = 1
+        #print(self.collisionScore)
 
-        self.fitnessScore += abs(self.velocity)*(1 - math.sqrt(abs(self.velL - self.velR)/self.velMax)) * sensorFactor  
+        self.fitnessScore += (abs(self.velocity)*(1 - math.sqrt(abs(self.velL - self.velR)/self.velMax)) / (self.collisionScore + 1))  
+
+       # self.fitnessScore = (dust_weight * self.dustEaten - collision_weight * self.collisionScore)/(self.time + 1)
+
+
+
+
+        #self.fitnessScore += (abs(self.velocity)*(1 - math.sqrt(abs(self.velL - self.velR)/self.velMax)) + 
+         #                       dust_weight * (self.dustEaten - self.prev_DustEaten)) * sensorFactor
         #print(self.fitnessScore)
 
 
@@ -959,18 +990,20 @@ def append_to_json_df(individuals, file_name, df, num_generation):
     lst_dict = []
     d = {}
     g = {}
+    col_af = 'Average_fitness_score'
+    val_af = sum(getattr(ind, 'fitnessScore') for ind in individuals)/len(individuals)
     col_bf = 'Best_fitness_score'
     val_bf = max(getattr(ind, 'fitnessScore') for ind in individuals)
     col_mf = 'Minimum_fitness_score'
     val_mf = min(getattr(ind, 'fitnessScore') for ind in individuals)
-    d[col_bf], d[col_mf] = val_bf, val_mf
+    d[col_af], d[col_bf], d[col_mf] = val_af, val_bf, val_mf
     objects = individuals
     objects.sort(key=lambda x: x.fitnessScore, reverse=True)
     objects = objects[:5]
     name = "Best_"
     for i in range(len(objects)):
-        chromosome = objects[i].NN.create_chromosome()
-        d[name + str(i+1)] = chromosome.tolist()
+        chromosome_ = objects[i].NN.create_chromosome()
+        d[name + str(i+1)] = chromosome_.tolist()
 
     g['Generation_' + str(num_generation)] = d
 
@@ -985,22 +1018,15 @@ def append_to_json_df(individuals, file_name, df, num_generation):
         with open(file_name, 'w') as f:
             json.dump(g, f)
 
-    df_ = pd.DataFrame([{col_bf:val_bf, col_mf:val_mf}])
+    df_ = pd.DataFrame([{col_af:val_af, col_bf:val_bf, col_mf:val_mf}])
     df = df.append(df_, ignore_index=True)
-
-
-
     df.to_csv('Generation_data.csv')
 
     return df
 
-def plot(df):
 
-    if len(df) % 10 == 0:
-        ax = df.plot()
-        fig = ax.get_figure()
-        #fig.savefig('Fitness_score_evolution.jpg')
-        fig.savefig('Fitness_score_evolution.png')
+
+
 
 def read_weights_from_json(file_name, generations_num, best_num):
     '''
@@ -1024,17 +1050,16 @@ pygame.display.set_caption("BumbleBeeN'TheHood")
 
 start_point = Point(100, 100)
 
-number_of_individuals = 28
-number_of_winners = 8
+number_of_individuals = 32
 robots = []
 for i in range(number_of_individuals):
-    robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1))
+    robots.append(Robot(start_point, 30, 1, 12, 60, 10, 1))
     robots[i].create_adjust_sensors()
 
 #Genetic Algorithm class instance
 GA = GeneticAlgorithm()
 #DataFrame that stores Historical data for plotting
-df = pd.DataFrame(columns=['Best_fitness_score'])
+df = pd.DataFrame(columns=['Average_fitness_score', 'Best_fitness_score', 'Minimum_fitness_score'])
 #parents and children proportion
 proportion = 0.25
 
