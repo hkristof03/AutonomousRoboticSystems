@@ -174,19 +174,29 @@ class GeneticAlgorithm(object):
 
 
 
-    def GAPipeLine(self, individuals, proportion):
+    def GAPipeLine(self, individuals, pk, ck):
         #parents and children number
         #add two to children, and remove them at the end
-        pk = int(len(individuals) * proportion)
-        ck = int(len(individuals) - pk)
+        champion = self.selBest(individuals, 1)
         chosen_1 = self.selRoulette(individuals, pk)
         chosen_2 = self.selRoulette(chosen_1, ck + 2)
-        offsprings = []
-        mut_chance = 0.05
 
         print("len individuals:", len(individuals))
         print(len(chosen_1), "parents")
         print(len(chosen_2), "children")
+
+        if (len(chosen_1) < pk):
+            for j in range(pk - len(chosen_1)):
+                chosen_1.append(champion[0])
+        if (len(chosen_2) < (ck + 2)):
+            for k in range(ck + 2 - len(chosen_2)):
+                chosen_2.append(champion[0])
+        offsprings = []
+        mut_chance = 0.05
+
+        print("len individuals:", len(individuals))
+        print(len(chosen_1), "parents corrected")
+        print(len(chosen_2), "children corrected")
 
         i_ = 0
         step = 2
@@ -938,10 +948,10 @@ def redrawGameWindow():
     pygame.display.update()
 
 
-def run_GA(individuals, proportion, df, GA, file_name, num_generation):
+def run_GA(individuals, parents_num, children_num, df, GA, file_name, num_generation):
 
     df = append_to_json_df(individuals, file_name, df, num_generation)
-    new_population = GA.GAPipeLine(individuals, proportion)
+    new_population = GA.GAPipeLine(individuals, parents_num, children_num)
 
     return new_population, df
 
@@ -1018,6 +1028,9 @@ df = pd.DataFrame(columns=['Best_fitness_score'])
 #parents and children proportion
 proportion = 0.25
 
+pk = int(number_of_individuals * proportion)    #parents number
+ck = int(number_of_individuals - pk)            #children number
+
 
 layout = 'box'
 
@@ -1074,7 +1087,7 @@ while run:
 
         Dust.delete()
 
-    robots, df = robots, df = run_GA(robots, proportion, df, GA, file_name, generation)
+    robots, df = run_GA(robots, pk, ck, df, GA, file_name, generation)
 
     for robot in robots:
 
