@@ -1,3 +1,8 @@
+"""
+Authors:
+Kristof Horvath
+Nikitas Sourdakos
+"""
 import pygame, pygame.gfxdraw, math
 from pygame.locals import *
 from shapely.geometry import LineString
@@ -315,7 +320,6 @@ class RecurrentNeuralNetwork(object):
         good idea to initialize weight matrices with values in the interval
         (-1/sqrt(n), 1/sqrt(n)), where n denotes the number of input nodes for each
         weight matrice.
-
         Recurrent neurons get the output values with weight of one (always), and then pass them on to
         the hidden neurons (1 dt difference).
         '''
@@ -377,6 +381,9 @@ class RecurrentNeuralNetwork(object):
         return [item for sublist in output_vector for item in sublist]
 
 
+
+
+
 def CorrY(y):
     return (maxY - y)
 
@@ -394,7 +401,6 @@ class Dust(object):
     """
     Creates the dust for the whole map, comprised of the individual dust specks
     defined by the dust_speck class
-
     delete method destroys the remaining dust specks for each cicle
     """
 
@@ -608,14 +614,13 @@ class Robot(object):
         self.terminateLimit = 200
         # Neural Network
         # self.NN = NeuralNetwork(12, 2, 12)
-        self.NN = RecurrentNeuralNetwork(12, 2, 12)
+        self.NN = RecurrentNeuralNetwork(12, 2, 2)
 
     def eat_dust(self, Dust):
         """
         Checks if a dust_speck's center is inside the rumba. If so it gets
         eaten, and the dustEaten score increases, which is used later to
         calculate the fitness function.
-
         """
         self.prev_DustEaten = self.dustEaten
         for speck in Dust.specks:
@@ -698,7 +703,7 @@ class Robot(object):
     def fitness_function(self):
         """
         Calculates the fitness of the robot.
-        from the slides
+        Penalises rotation and rewards high speed straight movement, while penalising close distance to walls
         """
         self.fitnessScorePrevious = self.fitnessScore
 
@@ -709,17 +714,23 @@ class Robot(object):
             if sen.distance < minDist:
                 minDist = sen.distance
 
-        sensorFactor = minDist / maxSensorRange
+        sensorFactor = 1
+        if (minDist/maxSensorRange) < 0.2:
+            sensorFactor = minDist / maxSensorRange
         if minDist <= 4:
             sensorFactor = 0
 
-        if self.collision:
+        if minDist == 0:
             self.collisionScore += 1  # total dt that the robot has been colliding
             col = 1
 
         self.fitnessScore += abs(self.velocity) * (
                     1 - math.sqrt(abs(self.velL - self.velR) / self.velMax)) * sensorFactor
         # print(self.fitnessScore)
+
+
+
+
 
     def fitness_function_omega_1(self, gen):
         """
@@ -1001,7 +1012,7 @@ proportion = 0.25
 pk = int(number_of_individuals * proportion)  # parents number
 ck = int(number_of_individuals - pk)  # children number
 
-layout = 'box'
+layout = 'double 34box'
 
 # wall1 = Wall(Point(300, 0), Point(700, 692.8204))
 
@@ -1027,7 +1038,6 @@ while run:
     pygame.time.delay(30)  # milliseconds delay
     '''
     pygame.display.flip()
-
     for event in pygame.event.get():
         if event.type == QUIT:
             run = SystemExit
