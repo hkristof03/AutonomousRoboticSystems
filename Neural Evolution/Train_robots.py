@@ -1,5 +1,5 @@
 import Definitions as defs_
-from Definitions import pygame, Point, Layout, Dust, Robot, GeneticAlgorithm, pd, run_GA, mean, redrawGameWindow, RecurrentNeuralNetwork
+from Definitions import pygame, Point, Layout, Dust, Robot, GeneticAlgorithm, pd, run_GA, mean, redrawGameWindow, RecurrentNeuralNetwork, append_to_json
 
 
 window_width = 800
@@ -16,28 +16,25 @@ walls = Layout(layout)
 dust = Dust(150, window_width, window_height, 8, win)
 
 generation = 0
-number_of_individuals = 20
-number_of_winners = 4
+number_of_individuals = 40
+# parents and children proportion
+proportion = 0.25
+pk = int(number_of_individuals * proportion)  # parents number
+ck = int(number_of_individuals - pk)  # children number
+# Genetic Algorithm class instance
+GA = GeneticAlgorithm()
+
 NN = RecurrentNeuralNetwork(12, 2, 6)
 robots = []
 for i in range(number_of_individuals):
     robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1, NN))
     robots[i].create_adjust_sensors()
 
-# Genetic Algorithm class instance
-GA = GeneticAlgorithm()
-
-# parents and children proportion
-proportion = 0.25
-
-pk = int(number_of_individuals * proportion)  # parents number
-ck = int(number_of_individuals - pk)  # children number
-
 vals_bf = []
 vals_mf = []
 vals_avg = []
-file_name = 'Generations_data_test_4.json'
-file_name_df = 'Generations_data_test_4.csv'
+file_name = 'Generations_data_double_trapezoid_1.json'
+file_name_df = 'Generations_data_double_trapezoid_1.csv'
 
 run = True
 while run:
@@ -54,9 +51,9 @@ while run:
                 if event.type == pygame.QUIT:
                     pygame.quit()
 
-            bias_x = 0
-            bias_y = 0
-            d_theta = 0
+            #bias_x = 0
+            #bias_y = 0
+            #d_theta = 0
 
             robot.update_velocity()
             robot.move(walls)
@@ -87,6 +84,7 @@ while run:
 
         dust.delete()
 
+    append_to_json(robots, file_name, generation)
     val_bf = max(values)
     val_mf = min(values)
     val_avg = mean(values)
@@ -99,4 +97,5 @@ while run:
     print("max:", val_bf, "min:", val_mf, "avg:", val_avg)
     df = pd.DataFrame.from_dict(d)
     df.to_csv(file_name_df, index=False)
-    robots = run_GA(robots, pk, ck, GA, file_name, generation)
+    robots = run_GA(robots, pk, ck, GA)
+    generation += 1

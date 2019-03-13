@@ -921,13 +921,11 @@ def redrawGameWindow(win, robot, walls, dust):
     pygame.display.update()
     #pygame.display.flip()
 
-def run_GA(individuals, parents_num, children_num, GA, file_name, num_generation):
-    append_to_json_df(individuals, file_name, num_generation)
+def run_GA(individuals, parents_num, children_num, GA):
     new_population = GA.GAPipeLine(individuals, parents_num, children_num)
-
     return new_population
 
-def append_to_json_df(individuals, file_name, num_generation):
+def append_to_json(individuals, file_name, num_generation):
     lst_dict = []
     d = {}
     g = {}
@@ -947,7 +945,6 @@ def append_to_json_df(individuals, file_name, num_generation):
         data.update(g)
         with open(file_name, 'w') as f:
             json.dump(data, f)
-
     else:
         with open(file_name, 'w') as f:
             json.dump(g, f)
