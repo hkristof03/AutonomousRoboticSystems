@@ -98,4 +98,6 @@ while run:
     df = pd.DataFrame.from_dict(d)
     df.to_csv(file_name_df, index=False)
     robots = run_GA(robots, pk, ck, GA)
+    for robot in robots:
+        robot.reinitialize(start_point)
     generation += 1
