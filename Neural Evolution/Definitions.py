@@ -571,7 +571,7 @@ class Sensor(object):
 
 
 class Robot(object):
-    def __init__(self, point, radius, circle_width, num_sensors, sensor_range, velocity, sensor_width, NN):
+    def __init__(self, point, radius, circle_width, num_sensors, sensor_range, velocity, sensor_width, hidden_neurons):
         self.x = point.x
         self.y = point.y
         self.radius = radius
@@ -613,7 +613,7 @@ class Robot(object):
         self.terminateLimit = 200
         # Neural Network
         # self.NN = NeuralNetwork(12, 2, 12)
-        self.NN = NN
+        self.NN = RecurrentNeuralNetwork(12, 2, hidden_neurons)
 
     def eat_dust(self, Dust):
         """

@@ -1,6 +1,6 @@
 import Definitions as defs_
 from Definitions import pygame, Point, Layout, Dust, Robot, GeneticAlgorithm, pd, run_GA, mean, redrawGameWindow, RecurrentNeuralNetwork, append_to_json
-
+import random
 
 window_width = 800
 window_height = 600
@@ -11,7 +11,7 @@ pygame.display.set_caption("BumbleBeeN'TheHood")
 clock = pygame.time.Clock()
 FPS = 30
 start_point = defs_.Point(100, 100)
-layout = 'double trapezoid'
+layout = 'double box'
 walls = Layout(layout)
 dust = Dust(150, window_width, window_height, 8, win)
 
@@ -24,10 +24,10 @@ ck = int(number_of_individuals - pk)  # children number
 # Genetic Algorithm class instance
 GA = GeneticAlgorithm()
 
-NN = RecurrentNeuralNetwork(12, 2, 6)
+hidden_neurons = 6
 robots = []
 for i in range(number_of_individuals):
-    robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1, NN))
+    robots.append(Robot(start_point, 30, 1, 12, 80, 10, 1, hidden_neurons))
     robots[i].create_adjust_sensors()
 
 vals_bf = []
