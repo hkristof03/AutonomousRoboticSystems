@@ -118,12 +118,14 @@ class Robot(object):
         # Nik's attributes
         self.prev_theta = 0
         self.width = self.radius * 2
-        self.velocity = velocity
+        self.velR = 0
+        self.velL = 0
         self.velMax = 8
         self.velMin = -8
         self.acc = 0.1
+        self.iccX = 0
+        self.iccY = 0
         self.omega = 0
-        self.omega_acc = 0.0174533
         self.R = 0
         self.theta = 0
         self.dt = 1
@@ -132,6 +134,53 @@ class Robot(object):
         self.circle = self.center.buffer(self.radius).boundary
         self.angleDeg = 0
         self.collision = False
+        self.collisionScore = 0
+        self.velocityScore = 0
+        self.fitnessScore = 0
+        self.fitnessScorePrevious = 0
+        self.dustEaten = 0
+        self.prev_DustEaten = 0
+        self.time = 0
+        self.terminateTimer = 0
+        self.terminateLimit = 200
+        self.collisionLimit = 50
+        # Neural Network
+        # self.NN = NeuralNetwork(12, 2, 12)
+        #self.NN = RecurrentNeuralNetwork(12, 2, hidden_neurons)
+
+    def eat_dust(self, Dust):
+        """
+        Checks if a dust_speck's center is inside the rumba. If so it gets
+        eaten, and the dustEaten score increases, which is used later to
+        calculate the fitness function.
+
+        """
+        self.prev_DustEaten = self.dustEaten
+        for speck in Dust.specks:
+            if (speck.x - self.x) ** 2 + (speck.y - self.y) ** 2 <= (self.radius + speck.rad / 2) ** 2:
+                Dust.specks.remove(speck)
+                self.dustEaten += 1
+
+    def reinitialize(self, point):
+        self.fitnessScore = 0
+        self.fitnessScorePrevious = 0
+        self.dustEaten = 0
+        self.prev_DustEaten = 0
+        self.collisionScore = 0
+        self.time = 0
+        self.terminateTimer = 0
+        self.x = point.x
+        self.y = point.y
+        self.angleDeg = random.randint(0, 360)
+        self.theta = math.radians(self.angleDeg)
+        self.prev_theta = self.theta
+
+    def reposition(self, point):
+        self.x = point.x
+        self.y = point.y
+        self.angleDeg = random.randint(0, 360)
+        self.theta = math.radians(self.angleDeg)
+        self.prev_theta = self.theta
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -147,12 +196,100 @@ class Robot(object):
             # last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
+        # def terminate_check_orig(self):
+        """
+        Checks (after 10 timesteps)if the fitnessScore has not increased. 
+        If terminateLimit timesteps have passed, where the timestep does not increase, it 
+        terminates the simulation.
+        It also terminates the simulation after 2000 timesteps
+        """
+
+    def terminate_check(self):
+        """
+        Checks (after 10 timesteps)if the fitnessScore has not increased.
+        If terminateLimit timesteps have passed, where the timestep does not increase, it
+        terminates the simulation.
+        It also terminates the simulation after 2000 timesteps
+        """
+        maxSensorRange = self.sensor_range
+        minDist = maxSensorRange
+        for sen in self.sensors:
+            if sen.distance < minDist:
+                minDist = sen.distance
+
+        if minDist <= 1:
+            self.collisionScore += 1  # total dt that the robot has been colliding
+
+        terminate = False
+        if self.time >= 10:
+            if self.prev_DustEaten >= self.dustEaten:
+                self.terminateTimer += 1
+            else:
+                self.terminateTimer = 0
+            if ((self.terminateTimer > self.terminateLimit) or (self.collisionScore > self.collisionLimit)):
+                terminate = True
+                self.terminateTimer = 0
+                self.collisionScore = 0
+        return terminate
+
+    def fitness_function(self):
+        """
+        Calculates the fitness of the robot.
+        Penalises rotation and rewards high speed straight movement, while penalising close distance to walls
+        """
+        self.fitnessScorePrevious = self.fitnessScore
+
+        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
+        maxSensorRange = self.sensor_range
+        minDist = maxSensorRange
+        for sen in self.sensors:
+            if sen.distance < minDist:
+                minDist = sen.distance
+
+        sensorFactor = 1
+        if (minDist/maxSensorRange) < 0.15:
+            sensorFactor = minDist / maxSensorRange
+        if minDist <= 4:
+            sensorFactor = 0
+
+        #if minDist == 0:
+         #   self.collisionScore += 1  # total dt that the robot has been colliding
+          #  col = 1
+
+        self.fitnessScore += abs(self.velocity) * abs(1 - math.sqrt(abs(self.velL - self.velR) / (2*self.velMax))) * sensorFactor
+
+    def fitness_function_omega_1(self, gen):
+        """
+        Calculates the fitness of the robot.
+        Dust contributes positively, Collisions negatively
+        Omega divided by velocity contributes negatively to discourage spinning
+        """
+        self.fitnessScorePrevious = self.fitnessScore
+        if gen <= 5:
+            coll_weight = -5
+        else:
+            coll_weight = -50  # constant to adjust weight of collisions
+        dust_weight = 10  # constant to adjust weight of velocity
+        col = 0  # col is used to completely discount the velocity contribution if the object is colliding
+        rot_weight = -1
+
+        if self.collision:
+            self.collisionScore += 1  # total dt that the robot has been colliding
+            col = 1
+
+        self.fitnessScore = coll_weight * self.collisionScore + dust_weight * self.dustEaten  # + rot_weight * abs((abs(self.omega)/(abs(self.velocity)+1)))
+        # print(self.fitnessScore)
+
 
     def update_velocity(self):
         distances = []
+        prev_velocities = []
         for sen in self.sensors:
             distances.append(sen.distance)
-
+        prev_velocities.append(self.velL)
+        prev_velocities.append(self.velR)
+        velocities = self.NN.run(distances, prev_velocities)
+        self.velL, self.velR = velocities[0], velocities[1]
 
     def calculate_intersection(self, walls):
 
@@ -175,27 +312,37 @@ class Robot(object):
         return collision
 
     def key_input(self, keys):
-        #increment v
-        if keys[pygame.K_w]:
-            self.velocity += self.acc
-        #decrement v
-        if keys[pygame.K_s]:
-            self.velocity -= self.acc
-        #decrement omega
-        if keys[pygame.K_a]:
-            self.omega -= self.omega_acc
-        #increment omega
-        if keys[pygame.K_d]:
-            self.omega -= self.omega_acc
-        if keys[pygame.K_x]:
-            self.velocity = 0
-            self.omega = 0
-        # Constrain velocity    -NEEDS WORK-constrains wrongly for top-also limit negative speeds
-        if self.velocity >= self.velMax:
-            self.velocity = self.velMax
 
-        if self.velocity <= self.velMin:
-            self.velocity = self.velMin
+        if keys[pygame.K_w]:
+            self.velL += self.acc
+            self.velR += self.acc
+        if keys[pygame.K_s]:
+            self.velL -= self.acc
+            self.velR -= self.acc
+        if keys[pygame.K_d]:
+            self.velL += self.acc/5
+            self.velR -= self.acc/5
+        if keys[pygame.K_a]:
+            self.velL -= self.acc/5
+            self.velR += self.acc/5
+        if keys[pygame.K_x]:
+            self.velL = 0
+            self.velR = 0
+
+        # Constrain velocity    -NEEDS WORK-constrains wrongly for top-also limit negative speeds
+        if self.velL >= self.velMax:
+            self.velL = self.velMax
+
+        if self.velR >= self.velMax:
+            self.velR = self.velMax
+
+        if self.velL <= self.velMin:
+            self.velL = self.velMin
+
+        if self.velR <= self.velMin:
+            self.velR = self.velMin
+
+
 
 
     def move(self, walls):
@@ -203,18 +350,28 @@ class Robot(object):
         move resolves the kinematics of the robot
         it also updates the time attribute
         """
-        oldX = self.x
-        oldY = self.y
-        oldTheta = self.theta
-        state = np.array([oldX, oldY, oldTheta])
-        rotation = np.array([[self.dt * math.cos(oldTheta), 0], [self.dt * math.sin(oldTheta), 0], [0, self.dt]])
-        speed = np.array([self.velocity, self.omega])
-        new_attributes = state + np.matmul(rotation, speed)
-        self.x = new_attributes[0]
-        self.y = new_attributes[1]
-        self.theta = new_attributes[2]
+        self.velocity = (self.velL + self.velR) / 2
+        # Rotation
+        if self.velR == self.velL:
+            self.omega = 0
+            self.R = 0
+        else:
+            self.omega = (self.velR - self.velL) / self.width
+            self.R = (self.width / 2) * (self.velR + self.velL) / (self.velR - self.velL)
+            iccX = (self.x - self.R * math.sin(self.theta))
+            iccY = (self.y + self.R * math.cos(self.theta))
+            self.theta = self.theta + self.omega * self.dt
 
+        self.angleDeg = math.degrees(self.theta) % 360
 
+        # Movement-Update position
+        self.x += self.velocity * math.cos(self.theta) * self.dt
+        self.y += self.velocity * math.sin(self.theta) * self.dt
+
+        # COLLISION
+
+        # doubleCollision = False
+        # singleCollision = False
         otherWalls = walls.copy()
         for wall_ in walls:
             otherWalls.remove(wall_)
@@ -256,7 +413,7 @@ class Robot(object):
                                 math.sin(math.radians(wall_.angleDeg)))
                             doubleCollision = True
         # increase time
-        #self.time += self.dt
+        self.time += self.dt
         # END COLLISION
 
     def draw(self, win):
@@ -285,6 +442,19 @@ class Robot(object):
             pygame.draw.line(win, (255, 0, 0), (sen.x1, CorrY(sen.y1)), (sen.x2, CorrY(sen.y2)), sen.width)
             text_ = self.font.render(str(sen.distance), 1, BLUE)
             win.blit(text_, (sen.x1, CorrY(sen.y1)))
+        # WHEELS
+        textPosL = (self.x + (math.cos(self.theta + math.radians(90)) - 0.15) * textDistance,
+                    CorrY(self.y + (math.sin(self.theta + math.radians(90))) * textDistance - math.sin(
+                        self.theta) * 5 - 5))
+        textPosR = (self.x + (math.cos(self.theta + math.radians(-90)) - 0.15) * textDistance,
+                    CorrY(self.y + (math.sin(self.theta + math.radians(-90))) * textDistance - math.sin(
+                        self.theta) * 5 - 5))
+
+        textL = self.font.render(format(self.velL, '.2f'), 1, RED)
+        textR = self.font.render(format(self.velR, '.2f'), 1, RED)
+        win.blit(textL, textPosL)
+        win.blit(textR, textPosR)
+
 
 
 def redrawGameWindow(win, robot, walls):
