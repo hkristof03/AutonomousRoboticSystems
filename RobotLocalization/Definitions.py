@@ -118,13 +118,12 @@ class Robot(object):
         # Nik's attributes
         self.prev_theta = 0
         self.width = self.radius * 2
-        self.velocity = velocity
+        self.velR = 0
+        self.velL = 0
         self.velMax = 8
         self.velMin = -8
         self.acc = 0.1
         self.omega = 0
-        self.omega_acc = 0.0174533
-        self.R = 0
         self.theta = 0
         self.dt = 1
         self.font = pygame.font.SysFont('comicsans', 16, False, False)
@@ -132,6 +131,15 @@ class Robot(object):
         self.circle = self.center.buffer(self.radius).boundary
         self.angleDeg = 0
         self.collision = False
+        #self.time = 0
+
+        # Neural Network
+        # self.NN = NeuralNetwork(12, 2, 12)
+        #self.NN = RecurrentNeuralNetwork(12, 2, hidden_neurons)
+
+
+
+
 
     def create_adjust_sensors(self):
         self.sensor_range += self.radius
@@ -147,12 +155,25 @@ class Robot(object):
             # last parameter the rotation degree
             sen.update_rotate_sensor_line(self.x, self.y, d_theta)
 
+        # def terminate_check_orig(self):
+        """
+        Checks (after 10 timesteps)if the fitnessScore has not increased. 
+        If terminateLimit timesteps have passed, where the timestep does not increase, it 
+        terminates the simulation.
+        It also terminates the simulation after 2000 timesteps
+        """
+
+
 
     def update_velocity(self):
         distances = []
+        prev_velocities = []
         for sen in self.sensors:
             distances.append(sen.distance)
-
+        prev_velocities.append(self.velL)
+        prev_velocities.append(self.velR)
+        velocities = self.NN.run(distances, prev_velocities)
+        self.velL, self.velR = velocities[0], velocities[1]
 
     def calculate_intersection(self, walls):
 
@@ -175,27 +196,37 @@ class Robot(object):
         return collision
 
     def key_input(self, keys):
-        #increment v
-        if keys[pygame.K_w]:
-            self.velocity += self.acc
-        #decrement v
-        if keys[pygame.K_s]:
-            self.velocity -= self.acc
-        #decrement omega
-        if keys[pygame.K_a]:
-            self.omega -= self.omega_acc
-        #increment omega
-        if keys[pygame.K_d]:
-            self.omega -= self.omega_acc
-        if keys[pygame.K_x]:
-            self.velocity = 0
-            self.omega = 0
-        # Constrain velocity    -NEEDS WORK-constrains wrongly for top-also limit negative speeds
-        if self.velocity >= self.velMax:
-            self.velocity = self.velMax
 
-        if self.velocity <= self.velMin:
-            self.velocity = self.velMin
+        if keys[pygame.K_w]:
+            self.velL += self.acc
+            self.velR += self.acc
+        if keys[pygame.K_s]:
+            self.velL -= self.acc
+            self.velR -= self.acc
+        if keys[pygame.K_d]:
+            self.velL += self.acc/5
+            self.velR -= self.acc/5
+        if keys[pygame.K_a]:
+            self.velL -= self.acc/5
+            self.velR += self.acc/5
+        if keys[pygame.K_x]:
+            self.velL = 0
+            self.velR = 0
+
+        # Constrain velocity    -NEEDS WORK-constrains wrongly for top-also limit negative speeds
+        if self.velL >= self.velMax:
+            self.velL = self.velMax
+
+        if self.velR >= self.velMax:
+            self.velR = self.velMax
+
+        if self.velL <= self.velMin:
+            self.velL = self.velMin
+
+        if self.velR <= self.velMin:
+            self.velR = self.velMin
+
+
 
 
     def move(self, walls):
@@ -203,18 +234,25 @@ class Robot(object):
         move resolves the kinematics of the robot
         it also updates the time attribute
         """
-        oldX = self.x
-        oldY = self.y
-        oldTheta = self.theta
-        state = np.array([oldX, oldY, oldTheta])
-        rotation = np.array([[self.dt * math.cos(oldTheta), 0], [self.dt * math.sin(oldTheta), 0], [0, self.dt]])
-        speed = np.array([self.velocity, self.omega])
-        new_attributes = state + np.matmul(rotation, speed)
-        self.x = new_attributes[0]
-        self.y = new_attributes[1]
-        self.theta = new_attributes[2]
+        self.velocity = (self.velL + self.velR) / 2
+        # Rotation
 
 
+        self.omega = (self.velR - self.velL) / self.width
+        self.theta = self.theta + self.omega * self.dt
+
+        self.angleDeg = math.degrees(self.theta) % 360
+
+
+
+        # Movement-Update position
+        self.x += self.velocity * math.cos(self.theta) * self.dt
+        self.y += self.velocity * math.sin(self.theta) * self.dt
+
+        # COLLISION
+
+        # doubleCollision = False
+        # singleCollision = False
         otherWalls = walls.copy()
         for wall_ in walls:
             otherWalls.remove(wall_)
@@ -256,7 +294,7 @@ class Robot(object):
                                 math.sin(math.radians(wall_.angleDeg)))
                             doubleCollision = True
         # increase time
-        #self.time += self.dt
+       # self.time += self.dt
         # END COLLISION
 
     def draw(self, win):
@@ -285,6 +323,19 @@ class Robot(object):
             pygame.draw.line(win, (255, 0, 0), (sen.x1, CorrY(sen.y1)), (sen.x2, CorrY(sen.y2)), sen.width)
             text_ = self.font.render(str(sen.distance), 1, BLUE)
             win.blit(text_, (sen.x1, CorrY(sen.y1)))
+        # WHEELS
+        textPosL = (self.x + (math.cos(self.theta + math.radians(90)) - 0.15) * textDistance,
+                    CorrY(self.y + (math.sin(self.theta + math.radians(90))) * textDistance - math.sin(
+                        self.theta) * 5 - 5))
+        textPosR = (self.x + (math.cos(self.theta + math.radians(-90)) - 0.15) * textDistance,
+                    CorrY(self.y + (math.sin(self.theta + math.radians(-90))) * textDistance - math.sin(
+                        self.theta) * 5 - 5))
+
+        textL = self.font.render(format(self.velL, '.2f'), 1, RED)
+        textR = self.font.render(format(self.velR, '.2f'), 1, RED)
+        win.blit(textL, textPosL)
+        win.blit(textR, textPosR)
+
 
 
 def redrawGameWindow(win, robot, walls):
